@@ -1,0 +1,21 @@
+IP SRP PFR
+
+BB        X
+      /             \
+BTN   B                X
+     |    \          |    \
+BB   C     R         B        X 
+     |  \            | \    |   \ 
+BTN  B      X        F  C   X      B
+     |    |   \             |      |  \  \  
+BB   F    B    X            B      F   C  R
+        / | \  | \        / | \        |
+BTN     R C  F X  B      F  C  R       B
+                  | \          | \ \   | \
+BB                F  R         F  C R  F  C
+
+
+B = Bet
+X = Check
+R = Raise
+F = Fold
