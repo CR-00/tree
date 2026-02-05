@@ -1,9 +1,11 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { AppShell, ScrollArea, LoadingOverlay, Center, Stack, Title, Text, Button } from '@mantine/core';
+import { AppShell, ScrollArea, LoadingOverlay, Center, Stack, Title, Text, Button, Paper, Divider } from '@mantine/core';
+import { IconSitemap } from '@tabler/icons-react';
 import { useSession, signIn } from 'next-auth/react';
 import { Sidebar } from '@/components/Sidebar';
+import { AuthButton } from '@/components/AuthButton';
 import { TreeView, SelectedNodeData } from '@/components/TreeView';
 import { LeaksTable } from '@/components/LeaksTable';
 import { ProfileEditor } from '@/components/ProfileEditor';
@@ -156,10 +158,11 @@ export default function Home() {
     if (!profile) return;
 
     // Update the profile's nodeData
+    const { weakPercent: _oldWeak, ...existingNodeData } = profile.nodeData[nodeId] || {};
     const updatedNodeData = {
       ...profile.nodeData,
       [nodeId]: {
-        ...profile.nodeData[nodeId],
+        ...existingNodeData,
         frequency,
         ...(weakPercent !== undefined ? { weakPercent } : {}),
       },
@@ -437,14 +440,29 @@ export default function Home() {
   // Show sign-in page when not authenticated
   if (!isAuthenticated) {
     return (
-      <Center h="100vh">
-        <Stack align="center" gap="lg">
-          <Title order={1}>Tree</Title>
-          <Text c="dimmed" size="lg">Analyze poker decision trees and detect leaks</Text>
-          <Button size="lg" onClick={() => signIn('google')}>
-            Sign in with Google
-          </Button>
-        </Stack>
+      <Center h="100vh" className="login-bg">
+        <Paper shadow="xl" radius="md" p={40} className="login-card">
+          <Stack align="center" gap="xl">
+            <Stack align="center" gap="xs" mt="md">
+              <IconSitemap size={64} color="white" />
+              <Title order={1} c="white">Tree</Title>
+            </Stack>
+            <Divider label="Login" labelPosition="center" w="100%" color="dark.4" />
+            <Button
+              size="lg"
+              fullWidth
+              onClick={() => signIn('discord')}
+              className="discord-btn"
+              leftSection={
+                <svg width="20" height="15" viewBox="0 0 127.14 96.36" fill="currentColor">
+                  <path d="M107.7,8.07A105.15,105.15,0,0,0,81.47,0a72.06,72.06,0,0,0-3.36,6.83A97.68,97.68,0,0,0,49,6.83,72.37,72.37,0,0,0,45.64,0,105.89,105.89,0,0,0,19.39,8.09C2.79,32.65-1.71,56.6.54,80.21h0A105.73,105.73,0,0,0,32.71,96.36,77.7,77.7,0,0,0,39.6,85.25a68.42,68.42,0,0,1-10.85-5.18c.91-.66,1.8-1.34,2.66-2a75.57,75.57,0,0,0,64.32,0c.87.71,1.76,1.39,2.66,2a68.68,68.68,0,0,1-10.87,5.19,77,77,0,0,0,6.89,11.1A105.25,105.25,0,0,0,126.6,80.22h0C129.24,52.84,122.09,29.11,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53s5-12.74,11.43-12.74S54,46,53.89,53,48.84,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.25,60,73.25,53s5-12.74,11.44-12.74S96.23,46,96.12,53,91.08,65.69,84.69,65.69Z" />
+                </svg>
+              }
+            >
+              Sign in with Discord
+            </Button>
+          </Stack>
+        </Paper>
       </Center>
     );
   }
@@ -458,8 +476,8 @@ export default function Home() {
       }}
       padding={0}
     >
-      <AppShell.Navbar>
-        <ScrollArea h="100%">
+      <AppShell.Navbar style={{ display: 'flex', flexDirection: 'column' }}>
+        <ScrollArea style={{ flex: 1 }}>
           <Sidebar
             spots={spots}
             selectedSpotId={selectedSpotId}
@@ -473,6 +491,7 @@ export default function Home() {
             onClose={() => setMobileNavOpened(false)}
           />
         </ScrollArea>
+        <AuthButton />
       </AppShell.Navbar>
 
       <AppShell.Main style={{ height: '100vh', display: 'flex', flexDirection: 'column', position: 'relative' }}>

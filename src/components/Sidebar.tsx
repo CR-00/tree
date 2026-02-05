@@ -1,9 +1,8 @@
 'use client';
 
-import { NavLink, Stack, Text, Box, ActionIcon, Button, Menu, CloseButton } from '@mantine/core';
+import { NavLink, Stack, Title, Text, Box, ActionIcon, Button, Menu, CloseButton } from '@mantine/core';
 import { IconSitemap } from '@tabler/icons-react';
 import { Spot } from '@/types';
-import { AuthButton } from './AuthButton';
 
 interface SidebarProps {
   spots: Spot[];
@@ -36,11 +35,8 @@ export function Sidebar({
       )}
       <Box ta="center" mt="sm" mb={4}>
         <IconSitemap size={40} color="white" />
+        <Title order={4} c="white" mt={4}>Tree</Title>
       </Box>
-      <Box mb="xs">
-        <AuthButton />
-      </Box>
-
       {spots.length === 0 ? (
         <Box className="empty-state">
           <Text size="sm" c="dimmed" ta="center" mb="md">

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Drawer, NumberInput, Stack, Group, Badge, Button } from '@mantine/core';
+import { Drawer, NumberInput, Stack, Group, Badge, Button, Switch } from '@mantine/core';
 import { SelectedNodeData } from './TreeView';
 import { actionLabels } from '@/types';
 
@@ -17,33 +17,31 @@ export function NodeEditor({ opened, onClose, node, onSave, onSaveSizing }: Node
   const [frequency, setFrequency] = useState<number | string>(0);
   const [weakPercent, setWeakPercent] = useState<number | string>(0);
   const [sizing, setSizing] = useState<number | string>(50);
+  const [weakEnabled, setWeakEnabled] = useState(false);
   const isRaise = node?.action === 'raise';
 
   // Sync state when node changes
   useEffect(() => {
     if (node) {
       setFrequency(Math.round(node.frequency * 100));
-      if (node.weakPercent !== undefined) {
-        setWeakPercent(Math.round(node.weakPercent * 100));
-      }
-      if (node.sizing !== undefined) {
-        setSizing(node.sizing);
-      }
+      const hasWeakData = node.weakPercent !== undefined || node.gtoWeakPercent !== undefined;
+      setWeakEnabled(hasWeakData);
+      setWeakPercent(node.weakPercent !== undefined ? Math.round(node.weakPercent * 100) : 0);
+      setSizing(node.sizing !== undefined ? node.sizing : (node.action === 'raise' ? 3 : 50));
     }
   }, [node]);
 
   if (!node) return null;
 
-  const hasWeak = node.weakPercent !== undefined && node.gtoWeakPercent !== undefined;
-  const hasSizing = node.action === 'bet' || node.action === 'raise';
+  const isBetOrRaise = node.action === 'bet' || node.action === 'raise';
   const actionLabel = actionLabels[node.action as keyof typeof actionLabels] || node.action;
 
   const handleSave = () => {
     const freq = typeof frequency === 'number' ? frequency / 100 : 0;
-    const weak = hasWeak && typeof weakPercent === 'number' ? weakPercent / 100 : undefined;
+    const weak = isBetOrRaise && weakEnabled && typeof weakPercent === 'number' ? weakPercent / 100 : undefined;
     onSave(node.nodeId, freq, weak);
 
-    if (hasSizing && onSaveSizing) {
+    if (isBetOrRaise && onSaveSizing) {
       const defaultVal = isRaise ? 3 : 50;
       const sizingVal = typeof sizing === 'number' ? sizing : defaultVal;
       onSaveSizing(node.nodeId, sizingVal);
@@ -70,7 +68,7 @@ export function NodeEditor({ opened, onClose, node, onSave, onSaveSizing }: Node
           </Badge>
         </Group>
 
-        {hasSizing && (
+        {isBetOrRaise && (
           isRaise ? (
             <NumberInput
               label="Raise size (x facing bet)"
@@ -105,16 +103,25 @@ export function NodeEditor({ opened, onClose, node, onSave, onSaveSizing }: Node
           suffix="%"
         />
 
-        {hasWeak && (
-          <NumberInput
-            label="Weak %"
-            description={`GTO: ${Math.round(node.gtoWeakPercent! * 100)}%`}
-            value={weakPercent}
-            onChange={setWeakPercent}
-            min={0}
-            max={100}
-            suffix="%"
-          />
+        {isBetOrRaise && (
+          <>
+            <Switch
+              label="Track weak %"
+              checked={weakEnabled}
+              onChange={(e) => setWeakEnabled(e.currentTarget.checked)}
+            />
+            {weakEnabled && (
+              <NumberInput
+                label="Weak %"
+                description={node.gtoWeakPercent !== undefined ? `GTO: ${Math.round(node.gtoWeakPercent * 100)}%` : 'Optional'}
+                value={weakPercent}
+                onChange={setWeakPercent}
+                min={0}
+                max={100}
+                suffix="%"
+              />
+            )}
+          </>
         )}
 
         <Button onClick={handleSave} fullWidth>

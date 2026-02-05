@@ -20,8 +20,7 @@ export function applyProfilesToTree(
 
     // GTO values from GTO profile (default to 0 if not found)
     const gtoFrequency = gtoData?.frequency ?? 0;
-    const isBetOrRaise = node.action === 'bet' || node.action === 'raise';
-    const gtoWeakPercent = gtoData?.weakPercent ?? (isBetOrRaise ? 0 : undefined);
+    const gtoWeakPercent = gtoData?.weakPercent;
 
     // Actual values: use player profile if set, otherwise use GTO
     const frequency = playerData?.frequency ?? gtoFrequency;
