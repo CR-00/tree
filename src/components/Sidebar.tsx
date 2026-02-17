@@ -11,6 +11,8 @@ interface SidebarProps {
   onEditSpot: (spot: Spot) => void;
   onDeleteSpot: (spotId: string) => void;
   onCreateSpot: () => void;
+  onExportSpot?: (spot: Spot) => void;
+  onImportSpot?: () => void;
   onClose?: () => void;
 }
 
@@ -21,6 +23,8 @@ export function Sidebar({
   onEditSpot,
   onDeleteSpot,
   onCreateSpot,
+  onExportSpot,
+  onImportSpot,
   onClose,
 }: SidebarProps) {
   return (
@@ -76,6 +80,11 @@ export function Sidebar({
                     <Menu.Item onClick={() => onEditSpot(spot)}>
                       Edit
                     </Menu.Item>
+                    {onExportSpot && (
+                      <Menu.Item onClick={() => onExportSpot(spot)}>
+                        Export
+                      </Menu.Item>
+                    )}
                     <Menu.Item
                       color="red"
                       onClick={() => {
@@ -94,6 +103,11 @@ export function Sidebar({
           <Button fullWidth color="teal" variant="light" onClick={onCreateSpot} mt="sm">
             + New Spot
           </Button>
+          {onImportSpot && (
+            <Button fullWidth color="teal" variant="subtle" onClick={onImportSpot}>
+              Import Spot
+            </Button>
+          )}
         </Stack>
       )}
     </Stack>

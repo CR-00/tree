@@ -16,6 +16,44 @@ import { Profile, Player, Spot, BaseTreeNode, ProcessedSpot } from '@/types';
 
 const SKIP_AUTH = process.env.NEXT_PUBLIC_SKIP_AUTH === 'true';
 
+// Helper to trigger a JSON file download
+function downloadJson(data: unknown, filename: string) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// Helper to read a JSON file from a file input
+function readJsonFile<T>(file: File): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        resolve(JSON.parse(reader.result as string));
+      } catch {
+        reject(new Error('Invalid JSON file'));
+      }
+    };
+    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.readAsText(file);
+  });
+}
+
+// Helper to open a file picker and return the selected file
+function pickFile(accept: string): Promise<File | null> {
+  return new Promise((resolve) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = accept;
+    input.onchange = () => resolve(input.files?.[0] ?? null);
+    input.click();
+  });
+}
+
 export default function Home() {
   const { data: session, status } = useSession();
   const [spots, setSpots] = useState<Spot[]>([]);
@@ -428,6 +466,161 @@ export default function Home() {
     }
   };
 
+  // Export a spot with all its profiles as JSON
+  const handleExportSpot = useCallback((spot: Spot) => {
+    const spotProfiles = profiles
+      .filter(p => p.spotId === spot.id)
+      .map(({ id, spotId, ...rest }) => rest);
+    downloadJson({
+      version: 1,
+      type: 'spot',
+      spot: {
+        name: spot.name,
+        description: spot.description,
+        potSize: spot.potSize,
+        oopCombos: spot.oopCombos,
+        ipCombos: spot.ipCombos,
+        tree: spot.tree,
+      },
+      profiles: spotProfiles,
+    }, `${spot.name.replace(/\s+/g, '_')}.json`);
+  }, [profiles]);
+
+  // Import a spot from JSON
+  const handleImportSpot = useCallback(async () => {
+    const file = await pickFile('.json');
+    if (!file) return;
+
+    try {
+      const data = await readJsonFile<{
+        version?: number;
+        type?: string;
+        spot: { name: string; description: string; potSize?: number; oopCombos?: number; ipCombos?: number; tree: BaseTreeNode };
+        profiles?: Array<{ name: string; description: string; player: 'OOP' | 'IP'; isGto: boolean; nodeData: Record<string, { frequency: number; weakPercent?: number }> }>;
+      }>(file);
+
+      if (!data.spot?.name || !data.spot?.tree) {
+        alert('Invalid spot file: missing name or tree');
+        return;
+      }
+
+      // Create the spot
+      const res = await fetch('/api/spots', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data.spot),
+      });
+
+      if (!res.ok) {
+        alert('Failed to import spot');
+        return;
+      }
+
+      const savedSpot = await res.json();
+
+      // Import non-GTO profiles (GTO profiles are auto-created with the spot)
+      if (data.profiles) {
+        // Update GTO profiles with imported data
+        const newProfiles = await fetch(`/api/profiles?spotId=${savedSpot.id}`).then(r => r.json());
+
+        for (const importedProfile of data.profiles) {
+          if (importedProfile.isGto) {
+            // Find the auto-created GTO profile for this player and update it
+            const gtoProfile = newProfiles.find((p: Profile) => p.isGto && p.player === importedProfile.player);
+            if (gtoProfile) {
+              await fetch(`/api/profiles/${gtoProfile.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...gtoProfile, nodeData: importedProfile.nodeData }),
+              });
+            }
+          } else {
+            // Create non-GTO profile
+            await fetch('/api/profiles', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ...importedProfile, spotId: savedSpot.id }),
+            });
+          }
+        }
+      }
+
+      // Refresh spots and select the new one
+      const updatedSpots = await fetchSpots();
+      setSelectedSpotId(savedSpot.id);
+      if (updatedSpots.length > 0) {
+        await fetchProfiles(savedSpot.id);
+      }
+    } catch (error) {
+      alert('Failed to import spot: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    }
+  }, [fetchSpots, fetchProfiles]);
+
+  // Export a single profile as JSON
+  const handleExportProfile = useCallback((profile: Profile) => {
+    const { id, spotId, ...exportData } = profile;
+    downloadJson({
+      version: 1,
+      type: 'profile',
+      profile: exportData,
+    }, `${profile.name.replace(/\s+/g, '_')}_${profile.player}.json`);
+  }, []);
+
+  // Import a profile from JSON into the current spot
+  const handleImportProfile = useCallback(async (player: Player) => {
+    if (!selectedSpotId) return;
+
+    const file = await pickFile('.json');
+    if (!file) return;
+
+    try {
+      const data = await readJsonFile<{
+        version?: number;
+        type?: string;
+        profile: { name: string; description: string; player: 'OOP' | 'IP'; isGto: boolean; nodeData: Record<string, { frequency: number; weakPercent?: number }> };
+      }>(file);
+
+      if (!data.profile?.name || !data.profile?.nodeData) {
+        alert('Invalid profile file');
+        return;
+      }
+
+      // Override player to match the slot being imported into
+      const profileData = { ...data.profile, player, spotId: selectedSpotId };
+
+      if (profileData.isGto) {
+        // Update existing GTO profile
+        const gtoProfile = profiles.find(p => p.isGto && p.player === player);
+        if (gtoProfile) {
+          const res = await fetch(`/api/profiles/${gtoProfile.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...gtoProfile, nodeData: profileData.nodeData }),
+          });
+          if (res.ok) {
+            const saved = await res.json();
+            setProfiles(prev => prev.map(p => p.id === saved.id ? saved : p));
+          }
+        }
+      } else {
+        // Create new profile
+        const res = await fetch('/api/profiles', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(profileData),
+        });
+        if (res.ok) {
+          const saved = await res.json();
+          setProfiles(prev => [...prev, saved]);
+          if (player === 'OOP') setOOPProfileId(saved.id);
+          else setIPProfileId(saved.id);
+        }
+      }
+    } catch (error) {
+      alert('Failed to import profile: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    }
+  }, [selectedSpotId, profiles]);
+
   // Show loading state
   if (isLoading) {
     return (
@@ -488,6 +681,8 @@ export default function Home() {
             onEditSpot={handleEditSpot}
             onDeleteSpot={handleDeleteSpot}
             onCreateSpot={handleCreateSpot}
+            onExportSpot={handleExportSpot}
+            onImportSpot={handleImportSpot}
             onClose={() => setMobileNavOpened(false)}
           />
         </ScrollArea>
@@ -519,6 +714,8 @@ export default function Home() {
                 onIPProfileChange={setIPProfileId}
                 onEditProfile={handleEditProfile}
                 onCreateProfile={handleCreateProfile}
+                onExportProfile={handleExportProfile}
+                onImportProfile={handleImportProfile}
                 editMode={treeEditMode}
                 onToggleEditMode={() => setTreeEditMode(!treeEditMode)}
                 onAddNode={handleAddNode}

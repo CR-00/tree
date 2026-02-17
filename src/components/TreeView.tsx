@@ -92,6 +92,8 @@ interface TreeViewProps {
   onIPProfileChange?: (profileId: string) => void;
   onEditProfile?: (profile: Profile) => void;
   onCreateProfile?: (player: Player) => void;
+  onExportProfile?: (profile: Profile) => void;
+  onImportProfile?: (player: Player) => void;
   editMode?: boolean;
   onToggleEditMode?: () => void;
   onAddNode?: (parentId: string, action: string, player: 'OOP' | 'IP', street: string, sizing?: number) => void;
@@ -292,6 +294,8 @@ export function TreeView({
   onIPProfileChange,
   onEditProfile,
   onCreateProfile,
+  onExportProfile,
+  onImportProfile,
   editMode = false,
   onToggleEditMode,
   onAddNode,
@@ -450,6 +454,24 @@ export function TreeView({
                 >
                   +
                 </button>
+                {onExportProfile && selectedOOP && (
+                  <button
+                    className="profile-menu-btn"
+                    onClick={() => onExportProfile(selectedOOP)}
+                    title="Export profile"
+                  >
+                    ↓
+                  </button>
+                )}
+                {onImportProfile && (
+                  <button
+                    className="profile-menu-btn"
+                    onClick={() => onImportProfile('OOP')}
+                    title="Import profile"
+                  >
+                    ↑
+                  </button>
+                )}
               </div>
               <div className="profile-row">
                 <span className="profile-badge ip">IP</span>
@@ -476,6 +498,24 @@ export function TreeView({
                 >
                   +
                 </button>
+                {onExportProfile && selectedIP && (
+                  <button
+                    className="profile-menu-btn"
+                    onClick={() => onExportProfile(selectedIP)}
+                    title="Export profile"
+                  >
+                    ↓
+                  </button>
+                )}
+                {onImportProfile && (
+                  <button
+                    className="profile-menu-btn"
+                    onClick={() => onImportProfile('IP')}
+                    title="Import profile"
+                  >
+                    ↑
+                  </button>
+                )}
               </div>
             </div>
           )}
