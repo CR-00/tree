@@ -333,6 +333,60 @@ body {
 }
 
 
+/* Line tooltip */
+.line-tooltip-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.line-tooltip-trigger {
+  font-size: 14px;
+  color: #5c5f66;
+  cursor: default;
+  line-height: 1;
+  padding: 0 2px;
+  border-radius: 3px;
+  transition: color 0.15s ease;
+  user-select: none;
+}
+
+.line-tooltip-wrapper:hover .line-tooltip-trigger {
+  color: #909296;
+}
+
+.line-tooltip-popup {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1a1b1e;
+  border: 1px solid #373a40;
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-size: 12px;
+  color: #c1c2c5;
+  white-space: nowrap;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  z-index: 9999;
+  pointer-events: none;
+}
+
+.line-tooltip-popup::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: #373a40;
+}
+
+.line-tooltip-wrapper:hover .line-tooltip-popup {
+  display: block;
+}
+
 /* Hide the default React Flow handles */
 .action-card .handle {
   opacity: 0;

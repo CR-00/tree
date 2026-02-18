@@ -24,6 +24,7 @@ interface ActionNodeProps {
     actionAmount?: number;
     oopCombos: number;
     ipCombos: number;
+    line?: string;
   };
 }
 
@@ -55,6 +56,7 @@ export function ActionNode({ data }: ActionNodeProps) {
     actionAmount,
     oopCombos,
     ipCombos,
+    line,
   } = data;
 
   const playerClass = player.toLowerCase();
@@ -88,9 +90,17 @@ export function ActionNode({ data }: ActionNodeProps) {
       <Handle type="target" position={Position.Top} className="handle" />
 
       <div className="action-card-header">
-        <span className="action-label" title={`Action: ${action}${hasSizing ? (action === 'raise' ? ` at ${sizing}x facing bet` : ` at ${sizing}% of pot`) : ''}`}>
-          {displayLabel}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+          <span className="action-label" title={`Action: ${action}${hasSizing ? (action === 'raise' ? ` at ${sizing}x facing bet` : ` at ${sizing}% of pot`) : ''}`}>
+            {displayLabel}
+          </span>
+          {line && (
+            <div className="line-tooltip-wrapper">
+              <span className="line-tooltip-trigger">⋯</span>
+              <div className="line-tooltip-popup">{line}</div>
+            </div>
+          )}
+        </div>
         <div className="header-badges">
           {isMissedExploit && (
             <span className="exploit-badge missed" title="Missed exploit opportunity - opponent is overbluffing but you're folding too much">

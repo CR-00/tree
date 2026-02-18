@@ -195,7 +195,9 @@ function layoutTree(root: TreeNodeType, initialPotSize: number, initialOopCombos
     pot: number = initialPotSize,
     facingBet: number = 0,
     parentOopCombos: number = initialOopCombos,
-    parentIpCombos: number = initialIpCombos
+    parentIpCombos: number = initialIpCombos,
+    oopPath: string[] = [],
+    ipPath: string[] = []
   ) {
     const subtreeWidth = getSubtreeWidth(node);
     const nodeX = x + subtreeWidth / 2 - nodeWidth / 2;
@@ -209,6 +211,18 @@ function layoutTree(root: TreeNodeType, initialPotSize: number, initialOopCombos
 
     // Calculate pot after this action
     const { newPot, newFacingBet, actionAmount } = calculatePot(node.action, pot, facingBet, node.sizing);
+
+    // Build the display label for this node (with sizing suffix)
+    const nodeLabel = actionLabels[node.action];
+    const hasSizing = (node.action === 'bet' || node.action === 'raise') && node.sizing !== undefined;
+    const nodeDisplayLabel = hasSizing
+      ? node.action === 'raise' ? `${nodeLabel}${node.sizing}X` : `${nodeLabel}${node.sizing}`
+      : nodeLabel;
+
+    // Only append this action to the acting player's path, mirroring LeaksTable logic
+    const newOopPath = node.player === 'OOP' ? [...oopPath, nodeDisplayLabel] : oopPath;
+    const newIpPath = node.player === 'IP' ? [...ipPath, nodeDisplayLabel] : ipPath;
+    const playerPath = node.player === 'OOP' ? newOopPath : newIpPath;
 
     // Check for fold leaks
     const isOverfold = node.action === 'fold' && node.frequency > node.gtoFrequency;
@@ -256,6 +270,7 @@ function layoutTree(root: TreeNodeType, initialPotSize: number, initialOopCombos
         actionAmount,
         oopCombos,
         ipCombos,
+        line: playerPath.join(' → '),
       },
       sourcePosition: Position.Bottom,
       targetPosition: Position.Top,
@@ -291,7 +306,9 @@ function layoutTree(root: TreeNodeType, initialPotSize: number, initialOopCombos
         newPot,
         newFacingBet,
         oopCombos,
-        ipCombos
+        ipCombos,
+        newOopPath,
+        newIpPath
       );
       childX += childWidth + horizontalSpacing;
     }
