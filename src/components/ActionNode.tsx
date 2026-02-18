@@ -17,6 +17,7 @@ interface ActionNodeProps {
     isOverfold?: boolean;
     isUnderfold?: boolean;
     isOverbluff?: boolean;
+    isUnderbluff?: boolean;
     isMissedExploit?: boolean;
     isExploiting?: boolean;
     potSize: number;
@@ -49,6 +50,7 @@ export function ActionNode({ data }: ActionNodeProps) {
     isOverfold,
     isUnderfold,
     isOverbluff,
+    isUnderbluff,
     isMissedExploit,
     isExploiting,
     potSize,
@@ -66,6 +68,7 @@ export function ActionNode({ data }: ActionNodeProps) {
   else if (isOverfold) leakClass = 'overfold';
   else if (isUnderfold) leakClass = 'underfold';
   else if (isOverbluff) leakClass = 'overbluff';
+  else if (isUnderbluff) leakClass = 'underbluff';
 
   const freq = Math.round(frequency * 100);
   const gto = Math.round(gtoFrequency * 100);

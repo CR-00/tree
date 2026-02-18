@@ -228,11 +228,15 @@ function layoutTree(root: TreeNodeType, initialPotSize: number, initialOopCombos
     const isOverfold = node.action === 'fold' && node.frequency > node.gtoFrequency;
     const isUnderfold = node.action === 'fold' && node.frequency < node.gtoFrequency;
 
-    // Check for overbluffs (B/R nodes with weak% > gtoWeak%)
+    // Check for overbluffs/underbluffs (B/R nodes with weak% vs gtoWeak%)
     const isOverbluff = (node.action === 'bet' || node.action === 'raise') &&
       node.weakPercent !== undefined &&
       node.gtoWeakPercent !== undefined &&
       node.weakPercent > node.gtoWeakPercent;
+    const isUnderbluff = (node.action === 'bet' || node.action === 'raise') &&
+      node.weakPercent !== undefined &&
+      node.gtoWeakPercent !== undefined &&
+      node.weakPercent < node.gtoWeakPercent;
 
     // Check for passive exploits: fold decisions after opponent overbluffs
     const opponent = node.player === 'OOP' ? 'IP' : 'OOP';
@@ -262,6 +266,7 @@ function layoutTree(root: TreeNodeType, initialPotSize: number, initialOopCombos
         isOverfold,
         isUnderfold,
         isOverbluff,
+        isUnderbluff,
         isMissedExploit,
         isExploiting,
         hasChildren: node.children.length > 0,
@@ -471,6 +476,10 @@ export function TreeView({
               <div className="legend-item">
                 <div className="legend-color overbluff" />
                 <span>Overbluff</span>
+              </div>
+              <div className="legend-item">
+                <div className="legend-color underbluff" />
+                <span>Underbluff</span>
               </div>
             </div>
             <div className="legend-divider" />

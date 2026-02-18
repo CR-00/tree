@@ -107,6 +107,10 @@ body {
   box-shadow: 0 0 0 2px #9775fa, 0 4px 12px rgba(151, 117, 250, 0.3);
 }
 
+.action-card.underbluff {
+  box-shadow: 0 0 0 2px #66d9e8, 0 4px 12px rgba(102, 217, 232, 0.3);
+}
+
 .action-card.missed-exploit {
   box-shadow: 0 0 0 2px #e64980, 0 4px 12px rgba(230, 73, 128, 0.4);
   background: linear-gradient(135deg, #25262b 0%, #2d1f2a 100%);
@@ -735,6 +739,11 @@ body {
   box-shadow: 0 0 6px rgba(151, 117, 250, 0.5);
 }
 
+.legend-color.underbluff {
+  background: #66d9e8;
+  box-shadow: 0 0 6px rgba(102, 217, 232, 0.5);
+}
+
 .legend-color.missed-exploit {
   background: #e64980;
   box-shadow: 0 0 6px rgba(230, 73, 128, 0.5);
@@ -850,6 +859,11 @@ body {
 
 .leak-type-overbluff {
   color: #d0bfff;
+  font-weight: 600;
+}
+
+.leak-type-underbluff {
+  color: #66d9e8;
   font-weight: 600;
 }
 

@@ -9,7 +9,7 @@ interface Leak {
   nodeId: string;
   path: string;
   player: 'OOP' | 'IP';
-  type: 'overfold' | 'underfold' | 'overbluff';
+  type: 'overfold' | 'underfold' | 'overbluff' | 'underbluff';
   frequency: number;
   gtoFrequency: number;
   diff: number;
@@ -30,6 +30,7 @@ interface LeaksTableProps {
 }
 
 type SortField = 'type' | 'street' | 'potSize' | 'reach' | 'diff' | 'combos';
+
 type SortDirection = 'asc' | 'desc';
 
 // Calculate pot after an action
@@ -128,20 +129,21 @@ function findLeaks(
     }
   }
 
-  // Check for overbluffs (B/R nodes with weak% > gtoWeak%)
+  // Check for overbluffs/underbluffs (B/R nodes with weak% vs gtoWeak%)
   if ((node.action === 'bet' || node.action === 'raise') &&
       node.weakPercent !== undefined &&
       node.gtoWeakPercent !== undefined &&
-      node.weakPercent > node.gtoWeakPercent) {
+      node.weakPercent !== node.gtoWeakPercent) {
     const playerPath = node.player === 'OOP' ? newOopPath : newIpPath;
+    const isOver = node.weakPercent > node.gtoWeakPercent;
     leaks.push({
       nodeId: node.id,
       path: playerPath.join(' → '),
       player: node.player,
-      type: 'overbluff',
+      type: isOver ? 'overbluff' : 'underbluff',
       frequency: node.weakPercent,
       gtoFrequency: node.gtoWeakPercent,
-      diff: node.weakPercent - node.gtoWeakPercent,
+      diff: Math.abs(node.weakPercent - node.gtoWeakPercent),
       reach,
       street: node.street,
       potSize: newPot,
@@ -195,7 +197,7 @@ export function LeaksTable({ tree, initialPotSize, initialOopCombos, initialIpCo
   const handleCopy = useCallback((leaks: Leak[]) => {
     const headers = ['Type', 'Street', 'Line', 'Pot (BB)', 'Reach %', 'Combos', 'Actual %', 'GTO %', 'Diff %'];
     const rows = leaks.map(l => [
-      l.type === 'overfold' ? 'Overfold' : l.type === 'underfold' ? 'Underfold' : 'Overbluff',
+      l.type === 'overfold' ? 'Overfold' : l.type === 'underfold' ? 'Underfold' : l.type === 'overbluff' ? 'Overbluff' : 'Underbluff',
       streetLabels[l.street],
       l.path,
       l.potSize.toFixed(1),
@@ -309,7 +311,7 @@ export function LeaksTable({ tree, initialPotSize, initialOopCombos, initialIpCo
               style={onLeakClick ? { cursor: 'pointer' } : undefined}
             >
               <Table.Td className={`leak-type-${leak.type}`}>
-                {leak.type === 'overfold' ? 'Overfold' : leak.type === 'underfold' ? 'Underfold' : 'Overbluff'}
+                {leak.type === 'overfold' ? 'Overfold' : leak.type === 'underfold' ? 'Underfold' : leak.type === 'overbluff' ? 'Overbluff' : 'Underbluff'}
               </Table.Td>
               <Table.Td>
                 <span className={`street-pill ${leak.street}`}>
@@ -332,6 +334,7 @@ export function LeaksTable({ tree, initialPotSize, initialOopCombos, initialIpCo
               <Table.Td className={`leak-type-${leak.type}`}>
                 {leak.type === 'overfold' || leak.type === 'overbluff' ? '+' : '-'}{Math.round(leak.diff * 100)}%
               </Table.Td>
+
             </Table.Tr>
           ))}
         </Table.Tbody>
@@ -369,6 +372,7 @@ export function LeaksTable({ tree, initialPotSize, initialOopCombos, initialIpCo
                 { value: 'overfold', label: 'Overfold' },
                 { value: 'underfold', label: 'Underfold' },
                 { value: 'overbluff', label: 'Overbluff' },
+                { value: 'underbluff', label: 'Underbluff' },
               ]}
               w={120}
             />
