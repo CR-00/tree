@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useCallback } from 'react';
 import { Table, Tabs, Select, Group, ActionIcon, Text, Collapse } from '@mantine/core';
 import { IconChevronDown, IconChevronUp, IconArrowsSort } from '@tabler/icons-react';
 import { TreeNode, actionLabels, streetLabels, Street } from '@/types';
@@ -157,12 +157,39 @@ function findLeaks(
   return leaks;
 }
 
+const DEFAULT_HEIGHT = 280;
+const MIN_HEIGHT = 100;
+const MAX_HEIGHT = 600;
+
 export function LeaksTable({ tree, initialPotSize, initialOopCombos, initialIpCombos, visible, onToggleVisible, onLeakClick }: LeaksTableProps) {
   const [activeTab, setActiveTab] = useState<string | null>('oop');
   const [sortField, setSortField] = useState<SortField>('reach');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [typeFilter, setTypeFilter] = useState<string | null>(null);
   const [streetFilter, setStreetFilter] = useState<string | null>(null);
+  const [panelHeight, setPanelHeight] = useState(DEFAULT_HEIGHT);
+  const dragStartY = useRef<number>(0);
+  const dragStartHeight = useRef<number>(DEFAULT_HEIGHT);
+
+  const handleResizeStart = useCallback((e: React.PointerEvent) => {
+    e.preventDefault();
+    dragStartY.current = e.clientY;
+    dragStartHeight.current = panelHeight;
+
+    const onMove = (ev: PointerEvent) => {
+      const delta = dragStartY.current - ev.clientY;
+      const newHeight = Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, dragStartHeight.current + delta));
+      setPanelHeight(newHeight);
+    };
+
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  }, [panelHeight]);
 
   const allLeaks = useMemo(() => findLeaks(tree, initialPotSize, initialOopCombos, initialIpCombos), [tree, initialPotSize, initialOopCombos, initialIpCombos]);
 
@@ -294,7 +321,8 @@ export function LeaksTable({ tree, initialPotSize, initialOopCombos, initialIpCo
   const totalLeaks = allLeaks.length;
 
   return (
-    <div className="leaks-table-container">
+    <div className="leaks-panel" style={visible ? { height: panelHeight } : undefined}>
+      <div className="leaks-resize-handle" onPointerDown={handleResizeStart} />
       <div className="leaks-table-header-bar">
         <Group gap="sm" align="center">
           <ActionIcon
@@ -340,26 +368,28 @@ export function LeaksTable({ tree, initialPotSize, initialOopCombos, initialIpCo
         )}
       </div>
 
-      <Collapse in={visible}>
-        <Tabs value={activeTab} onChange={setActiveTab}>
-          <Tabs.List>
-            <Tabs.Tab value="oop">
-              OOP Leaks ({oopLeaks.length})
-            </Tabs.Tab>
-            <Tabs.Tab value="ip">
-              IP Leaks ({ipLeaks.length})
-            </Tabs.Tab>
-          </Tabs.List>
+      <div className="leaks-table-container">
+        <Collapse in={visible}>
+          <Tabs value={activeTab} onChange={setActiveTab}>
+            <Tabs.List>
+              <Tabs.Tab value="oop">
+                OOP Leaks ({oopLeaks.length})
+              </Tabs.Tab>
+              <Tabs.Tab value="ip">
+                IP Leaks ({ipLeaks.length})
+              </Tabs.Tab>
+            </Tabs.List>
 
-          <Tabs.Panel value="oop" pt="sm">
-            {renderTable(oopLeaks)}
-          </Tabs.Panel>
+            <Tabs.Panel value="oop" pt="sm">
+              {renderTable(oopLeaks)}
+            </Tabs.Panel>
 
-          <Tabs.Panel value="ip" pt="sm">
-            {renderTable(ipLeaks)}
-          </Tabs.Panel>
-        </Tabs>
-      </Collapse>
+            <Tabs.Panel value="ip" pt="sm">
+              {renderTable(ipLeaks)}
+            </Tabs.Panel>
+          </Tabs>
+        </Collapse>
+      </div>
     </div>
   );
 }
