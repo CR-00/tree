@@ -304,6 +304,38 @@ export default function Home() {
     }
   }, [selectedSpot]);
 
+  const handleUpdateNode = useCallback(async (nodeId: string, action: string, player: Player, street: string, sizing?: number) => {
+    if (!selectedSpot) return;
+
+    const updateNode = (node: BaseTreeNode): BaseTreeNode => {
+      if (node.id === nodeId) {
+        return {
+          ...node,
+          action: action as BaseTreeNode['action'],
+          player,
+          street: street as BaseTreeNode['street'],
+          sizing,
+        };
+      }
+      return { ...node, children: node.children.map(updateNode) };
+    };
+
+    const updatedTree = updateNode(selectedSpot.tree as BaseTreeNode);
+    const updatedSpot = { ...selectedSpot, tree: updatedTree };
+
+    setSpots(prev => prev.map(s => s.id === selectedSpot.id ? updatedSpot : s));
+
+    try {
+      await fetch(`/api/spots/${selectedSpot.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedSpot),
+      });
+    } catch (error) {
+      console.error('Failed to update node:', error);
+    }
+  }, [selectedSpot]);
+
   const handleDeleteNode = useCallback(async (nodeId: string) => {
     if (!selectedSpot) return;
 
@@ -343,13 +375,14 @@ export default function Home() {
 
   // Apply profiles to the tree
   const processedTree = useMemo(() => {
-    if (!selectedSpot || !gtoOOPProfile || !gtoIPProfile || !selectedOOPProfile || !selectedIPProfile) {
-      return null;
-    }
+    if (!selectedSpot) return null;
+    const emptyProfile = (player: Player): Profile => ({
+      id: '', spotId: '', name: '', description: '', player, isGto: true, nodeData: {},
+    });
     return applyProfilesToTree(
       selectedSpot.tree as BaseTreeNode,
-      { OOP: gtoOOPProfile, IP: gtoIPProfile },
-      { OOP: selectedOOPProfile, IP: selectedIPProfile }
+      { OOP: gtoOOPProfile ?? emptyProfile('OOP'), IP: gtoIPProfile ?? emptyProfile('IP') },
+      { OOP: selectedOOPProfile ?? gtoOOPProfile ?? emptyProfile('OOP'), IP: selectedIPProfile ?? gtoIPProfile ?? emptyProfile('IP') }
     );
   }, [selectedSpot, gtoOOPProfile, gtoIPProfile, selectedOOPProfile, selectedIPProfile]);
 
@@ -727,6 +760,7 @@ export default function Home() {
                 onToggleEditMode={() => setTreeEditMode(!treeEditMode)}
                 onAddNode={handleAddNode}
                 onDeleteNode={handleDeleteNode}
+                onUpdateNode={handleUpdateNode}
                 focusTarget={focusTarget}
               />
             </div>

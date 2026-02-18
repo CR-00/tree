@@ -18,8 +18,8 @@ export function applyProfilesToTree(
     const gtoData = gtoProfile.nodeData[node.id];
     const playerData = playerProfile.nodeData[node.id];
 
-    // GTO values from GTO profile (default to 0 if not found)
-    const gtoFrequency = gtoData?.frequency ?? 0;
+    // GTO values from GTO profile (default to 1 if not found — show full frequency when unset)
+    const gtoFrequency = gtoData?.frequency ?? 1;
     const gtoWeakPercent = gtoData?.weakPercent;
 
     // Actual values: use player profile if set, otherwise use GTO

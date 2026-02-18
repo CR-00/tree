@@ -627,6 +627,30 @@ body {
   background: transparent;
 }
 
+.edit-modal-btn.save:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.edit-modal-btn.save:disabled:hover {
+  background: #fd7e14;
+}
+
+.edit-modal-divider {
+  height: 1px;
+  background: #373a40;
+  margin: 16px 0;
+}
+
+.edit-modal-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #5c5f66;
+  margin-bottom: 10px;
+}
+
 .legend-item {
   display: flex;
   align-items: center;
