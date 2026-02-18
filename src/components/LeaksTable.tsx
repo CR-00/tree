@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useRef, useCallback } from 'react';
 import { Table, Tabs, Select, Group, ActionIcon, Text, Collapse } from '@mantine/core';
-import { IconChevronDown, IconChevronUp, IconArrowsSort } from '@tabler/icons-react';
+import { IconChevronDown, IconChevronUp, IconArrowsSort, IconCopy, IconCheck } from '@tabler/icons-react';
 import { TreeNode, actionLabels, streetLabels, Street } from '@/types';
 
 interface Leak {
@@ -168,6 +168,7 @@ export function LeaksTable({ tree, initialPotSize, initialOopCombos, initialIpCo
   const [typeFilter, setTypeFilter] = useState<string | null>(null);
   const [streetFilter, setStreetFilter] = useState<string | null>(null);
   const [panelHeight, setPanelHeight] = useState(DEFAULT_HEIGHT);
+  const [copied, setCopied] = useState(false);
   const dragStartY = useRef<number>(0);
   const dragStartHeight = useRef<number>(DEFAULT_HEIGHT);
 
@@ -190,6 +191,26 @@ export function LeaksTable({ tree, initialPotSize, initialOopCombos, initialIpCo
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
   }, [panelHeight]);
+
+  const handleCopy = useCallback((leaks: Leak[]) => {
+    const headers = ['Type', 'Street', 'Line', 'Pot (BB)', 'Reach %', 'Combos', 'Actual %', 'GTO %', 'Diff %'];
+    const rows = leaks.map(l => [
+      l.type === 'overfold' ? 'Overfold' : l.type === 'underfold' ? 'Underfold' : 'Overbluff',
+      streetLabels[l.street],
+      l.path,
+      l.potSize.toFixed(1),
+      (l.reach * 100).toFixed(1),
+      l.combos.toFixed(1),
+      Math.round(l.frequency * 100).toString(),
+      Math.round(l.gtoFrequency * 100).toString(),
+      `${l.type === 'overfold' || l.type === 'overbluff' ? '+' : '-'}${Math.round(l.diff * 100)}`,
+    ]);
+    const tsv = [headers, ...rows].map(r => r.join('\t')).join('\n');
+    navigator.clipboard.writeText(tsv).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, []);
 
   const allLeaks = useMemo(() => findLeaks(tree, initialPotSize, initialOopCombos, initialIpCombos), [tree, initialPotSize, initialOopCombos, initialIpCombos]);
 
@@ -364,6 +385,14 @@ export function LeaksTable({ tree, initialPotSize, initialOopCombos, initialIpCo
               ]}
               w={120}
             />
+            <ActionIcon
+              variant="subtle"
+              onClick={() => handleCopy(activeTab === 'ip' ? ipLeaks : oopLeaks)}
+              title="Copy as table (paste into Google Sheets)"
+              color={copied ? 'teal' : undefined}
+            >
+              {copied ? <IconCheck size={16} /> : <IconCopy size={16} />}
+            </ActionIcon>
           </Group>
         )}
       </div>
