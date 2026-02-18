@@ -17,6 +17,7 @@ interface Leak {
   street: Street;
   potSize: number;
   combos: number;
+  relDiff: number;
 }
 
 interface LeaksTableProps {
@@ -29,8 +30,7 @@ interface LeaksTableProps {
   onLeakClick?: (nodeId: string) => void;
 }
 
-type SortField = 'type' | 'street' | 'potSize' | 'reach' | 'diff' | 'combos';
-
+type SortField = 'type' | 'street' | 'potSize' | 'reach' | 'diff' | 'combos' | 'relDiff';
 type SortDirection = 'asc' | 'desc';
 
 // Calculate pot after an action
@@ -111,6 +111,7 @@ function findLeaks(
         street: node.street,
         potSize: newPot,
         combos: actingCombos,
+        relDiff: node.gtoFrequency > 0 ? (node.frequency - node.gtoFrequency) / node.gtoFrequency : 0,
       });
     } else if (node.frequency < node.gtoFrequency) {
       leaks.push({
@@ -125,6 +126,7 @@ function findLeaks(
         street: node.street,
         potSize: newPot,
         combos: actingCombos,
+        relDiff: node.gtoFrequency > 0 ? (node.gtoFrequency - node.frequency) / node.gtoFrequency : 0,
       });
     }
   }
@@ -148,6 +150,7 @@ function findLeaks(
       street: node.street,
       potSize: newPot,
       combos: actingCombos,
+      relDiff: node.gtoWeakPercent > 0 ? Math.abs(node.weakPercent - node.gtoWeakPercent) / node.gtoWeakPercent : 0,
     });
   }
 
@@ -165,7 +168,7 @@ const MAX_HEIGHT = 600;
 
 export function LeaksTable({ tree, initialPotSize, initialOopCombos, initialIpCombos, visible, onToggleVisible, onLeakClick }: LeaksTableProps) {
   const [activeTab, setActiveTab] = useState<string | null>('oop');
-  const [sortField, setSortField] = useState<SortField>('reach');
+  const [sortField, setSortField] = useState<SortField>('relDiff');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [typeFilter, setTypeFilter] = useState<string | null>(null);
   const [streetFilter, setStreetFilter] = useState<string | null>(null);
@@ -195,7 +198,7 @@ export function LeaksTable({ tree, initialPotSize, initialOopCombos, initialIpCo
   }, [panelHeight]);
 
   const handleCopy = useCallback((leaks: Leak[]) => {
-    const headers = ['Type', 'Street', 'Line', 'Pot (BB)', 'Reach %', 'Combos', 'Actual %', 'GTO %', 'Diff %'];
+    const headers = ['Type', 'Street', 'Line', 'Pot (BB)', 'Reach %', 'Combos', 'Actual %', 'GTO %', 'Diff %', 'Rel. Diff %'];
     const rows = leaks.map(l => [
       l.type === 'overfold' ? 'Overfold' : l.type === 'underfold' ? 'Underfold' : l.type === 'overbluff' ? 'Overbluff' : 'Underbluff',
       streetLabels[l.street],
@@ -206,6 +209,7 @@ export function LeaksTable({ tree, initialPotSize, initialOopCombos, initialIpCo
       Math.round(l.frequency * 100).toString(),
       Math.round(l.gtoFrequency * 100).toString(),
       `${l.type === 'overfold' || l.type === 'overbluff' ? '+' : '-'}${Math.round(l.diff * 100)}`,
+      Math.round(l.relDiff * 100).toString(),
     ]);
     const tsv = [headers, ...rows].map(r => r.join('\t')).join('\n');
     navigator.clipboard.writeText(tsv).then(() => {
@@ -249,6 +253,9 @@ export function LeaksTable({ tree, initialPotSize, initialOopCombos, initialIpCo
           break;
         case 'combos':
           comparison = a.combos - b.combos;
+          break;
+        case 'relDiff':
+          comparison = a.relDiff - b.relDiff;
           break;
       }
       return sortDirection === 'desc' ? -comparison : comparison;
@@ -301,6 +308,7 @@ export function LeaksTable({ tree, initialPotSize, initialOopCombos, initialIpCo
             <Table.Th>Actual</Table.Th>
             <Table.Th>GTO</Table.Th>
             <SortableHeader field="diff">Diff</SortableHeader>
+            <SortableHeader field="relDiff">Rel. Diff</SortableHeader>
           </Table.Tr>
         </Table.Thead>
         <Table.Tbody>
@@ -334,7 +342,7 @@ export function LeaksTable({ tree, initialPotSize, initialOopCombos, initialIpCo
               <Table.Td className={`leak-type-${leak.type}`}>
                 {leak.type === 'overfold' || leak.type === 'overbluff' ? '+' : '-'}{Math.round(leak.diff * 100)}%
               </Table.Td>
-
+              <Table.Td>{Math.round(leak.relDiff * 100)}%</Table.Td>
             </Table.Tr>
           ))}
         </Table.Tbody>
