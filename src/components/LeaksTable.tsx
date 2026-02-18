@@ -6,6 +6,7 @@ import { IconChevronDown, IconChevronUp, IconArrowsSort } from '@tabler/icons-re
 import { TreeNode, actionLabels, streetLabels, Street } from '@/types';
 
 interface Leak {
+  nodeId: string;
   path: string;
   player: 'OOP' | 'IP';
   type: 'overfold' | 'underfold' | 'overbluff';
@@ -25,6 +26,7 @@ interface LeaksTableProps {
   initialIpCombos: number;
   visible: boolean;
   onToggleVisible: () => void;
+  onLeakClick?: (nodeId: string) => void;
 }
 
 type SortField = 'type' | 'street' | 'potSize' | 'reach' | 'diff' | 'combos';
@@ -97,6 +99,7 @@ function findLeaks(
     const playerPath = node.player === 'OOP' ? newOopPath : newIpPath;
     if (node.frequency > node.gtoFrequency) {
       leaks.push({
+        nodeId: node.id,
         path: playerPath.join(' → '),
         player: node.player,
         type: 'overfold',
@@ -110,6 +113,7 @@ function findLeaks(
       });
     } else if (node.frequency < node.gtoFrequency) {
       leaks.push({
+        nodeId: node.id,
         path: playerPath.join(' → '),
         player: node.player,
         type: 'underfold',
@@ -131,6 +135,7 @@ function findLeaks(
       node.weakPercent > node.gtoWeakPercent) {
     const playerPath = node.player === 'OOP' ? newOopPath : newIpPath;
     leaks.push({
+      nodeId: node.id,
       path: playerPath.join(' → '),
       player: node.player,
       type: 'overbluff',
@@ -152,7 +157,7 @@ function findLeaks(
   return leaks;
 }
 
-export function LeaksTable({ tree, initialPotSize, initialOopCombos, initialIpCombos, visible, onToggleVisible }: LeaksTableProps) {
+export function LeaksTable({ tree, initialPotSize, initialOopCombos, initialIpCombos, visible, onToggleVisible, onLeakClick }: LeaksTableProps) {
   const [activeTab, setActiveTab] = useState<string | null>('oop');
   const [sortField, setSortField] = useState<SortField>('reach');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
@@ -250,7 +255,11 @@ export function LeaksTable({ tree, initialPotSize, initialOopCombos, initialIpCo
         </Table.Thead>
         <Table.Tbody>
           {leaks.map((leak, i) => (
-            <Table.Tr key={i}>
+            <Table.Tr
+              key={i}
+              onClick={() => onLeakClick?.(leak.nodeId)}
+              style={onLeakClick ? { cursor: 'pointer' } : undefined}
+            >
               <Table.Td className={`leak-type-${leak.type}`}>
                 {leak.type === 'overfold' ? 'Overfold' : leak.type === 'underfold' ? 'Underfold' : 'Overbluff'}
               </Table.Td>

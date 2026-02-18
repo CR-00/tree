@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useCallback, useState } from 'react';
+import { useMemo, useCallback, useState, useEffect } from 'react';
 import {
   ReactFlow,
   Node,
@@ -10,6 +10,7 @@ import {
   ConnectionLineType,
   Panel,
   useInternalNode,
+  useReactFlow,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { ProcessedSpot, TreeNode as TreeNodeType, actionLabels, streetLabels, Profile, Player, Action, Street } from '@/types';
@@ -69,6 +70,18 @@ const edgeTypes = {
   tree: TreeEdge,
 };
 
+function NodeFocuser({ target }: { target: { nodeId: string; timestamp: number } | null }) {
+  const { fitView } = useReactFlow();
+
+  useEffect(() => {
+    if (!target) return;
+    fitView({ nodes: [{ id: target.nodeId }], duration: 600, padding: 0.5, maxZoom: 1.2 });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target?.nodeId, target?.timestamp]);
+
+  return null;
+}
+
 export interface SelectedNodeData {
   nodeId: string;
   player: 'OOP' | 'IP';
@@ -98,6 +111,7 @@ interface TreeViewProps {
   onToggleEditMode?: () => void;
   onAddNode?: (parentId: string, action: string, player: 'OOP' | 'IP', street: string, sizing?: number) => void;
   onDeleteNode?: (nodeId: string) => void;
+  focusTarget?: { nodeId: string; timestamp: number } | null;
 }
 
 interface LayoutResult {
@@ -300,6 +314,7 @@ export function TreeView({
   onToggleEditMode,
   onAddNode,
   onDeleteNode,
+  focusTarget,
 }: TreeViewProps) {
   const { nodes, edges } = useMemo(() => layoutTree(spot.tree, spot.potSize, spot.oopCombos, spot.ipCombos), [spot.tree, spot.potSize, spot.oopCombos, spot.ipCombos]);
 
@@ -529,6 +544,8 @@ export function TreeView({
             </button>
           )}
         </Panel>
+
+        <NodeFocuser target={focusTarget ?? null} />
 
         {/* Edit mode modal */}
         {showAddModal && editingNodeId && (

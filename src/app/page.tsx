@@ -86,6 +86,13 @@ export default function Home() {
   // Leaks panel visibility
   const [leaksPanelVisible, setLeaksPanelVisible] = useState(true);
 
+  // Focus target for jumping to a node from the leaks table
+  const [focusTarget, setFocusTarget] = useState<{ nodeId: string; timestamp: number } | null>(null);
+
+  const handleLeakClick = useCallback((nodeId: string) => {
+    setFocusTarget({ nodeId, timestamp: Date.now() });
+  }, []);
+
   // In dev mode, consider authenticated immediately
   const isAuthenticated = SKIP_AUTH || status === 'authenticated';
   const isLoading = !SKIP_AUTH && status === 'loading';
@@ -720,6 +727,7 @@ export default function Home() {
                 onToggleEditMode={() => setTreeEditMode(!treeEditMode)}
                 onAddNode={handleAddNode}
                 onDeleteNode={handleDeleteNode}
+                focusTarget={focusTarget}
               />
             </div>
             <LeaksTable
@@ -729,6 +737,7 @@ export default function Home() {
               initialIpCombos={processedSpot.ipCombos}
               visible={leaksPanelVisible}
               onToggleVisible={() => setLeaksPanelVisible(!leaksPanelVisible)}
+              onLeakClick={handleLeakClick}
             />
           </>
         ) : (
