@@ -28,6 +28,7 @@ interface LeaksTableProps {
   visible: boolean;
   onToggleVisible: () => void;
   onLeakClick?: (nodeId: string) => void;
+  hideRootFromLine?: boolean;
 }
 
 type SortField = 'type' | 'street' | 'potSize' | 'reach' | 'diff' | 'combos' | 'relDiff';
@@ -72,7 +73,9 @@ function findLeaks(
   pot: number = initialPotSize,
   facingBet: number = 0,
   parentOopCombos: number = initialOopCombos,
-  parentIpCombos: number = initialIpCombos
+  parentIpCombos: number = initialIpCombos,
+  isRoot = true,
+  hideRootFromLine = false
 ): Leak[] {
   const leaks: Leak[] = [];
 
@@ -89,10 +92,11 @@ function findLeaks(
   const { newPot, newFacingBet } = calculatePot(node.action, pot, facingBet, node.sizing);
 
   // Update the appropriate player's path
-  const newOopPath = node.player === 'OOP'
+  const includeInPath = !(isRoot && hideRootFromLine);
+  const newOopPath = node.player === 'OOP' && includeInPath
     ? [...oopPath, actionLabels[node.action]]
     : oopPath;
-  const newIpPath = node.player === 'IP'
+  const newIpPath = node.player === 'IP' && includeInPath
     ? [...ipPath, actionLabels[node.action]]
     : ipPath;
 
@@ -157,7 +161,7 @@ function findLeaks(
 
   // Recurse into children
   for (const child of node.children) {
-    leaks.push(...findLeaks(child, initialPotSize, initialOopCombos, initialIpCombos, newOopPath, newIpPath, childReach, newPot, newFacingBet, oopCombos, ipCombos));
+    leaks.push(...findLeaks(child, initialPotSize, initialOopCombos, initialIpCombos, newOopPath, newIpPath, childReach, newPot, newFacingBet, oopCombos, ipCombos, false, hideRootFromLine));
   }
 
   return leaks;
@@ -167,7 +171,7 @@ const DEFAULT_HEIGHT = 280;
 const MIN_HEIGHT = 100;
 const MAX_HEIGHT = 600;
 
-export function LeaksTable({ tree, initialPotSize, initialOopCombos, initialIpCombos, visible, onToggleVisible, onLeakClick }: LeaksTableProps) {
+export function LeaksTable({ tree, initialPotSize, initialOopCombos, initialIpCombos, visible, onToggleVisible, onLeakClick, hideRootFromLine = false }: LeaksTableProps) {
   const [activeTab, setActiveTab] = useState<string | null>('oop');
   const [sortField, setSortField] = useState<SortField>('relDiff');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
@@ -219,7 +223,7 @@ export function LeaksTable({ tree, initialPotSize, initialOopCombos, initialIpCo
     });
   }, []);
 
-  const allLeaks = useMemo(() => findLeaks(tree, initialPotSize, initialOopCombos, initialIpCombos), [tree, initialPotSize, initialOopCombos, initialIpCombos]);
+  const allLeaks = useMemo(() => findLeaks(tree, initialPotSize, initialOopCombos, initialIpCombos, [], [], 1, initialPotSize, 0, initialOopCombos, initialIpCombos, true, hideRootFromLine), [tree, initialPotSize, initialOopCombos, initialIpCombos, hideRootFromLine]);
 
   // Filter and sort leaks
   const filterAndSortLeaks = (leaks: Leak[]) => {

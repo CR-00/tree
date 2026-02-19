@@ -83,6 +83,9 @@ export default function Home() {
   // Tree edit mode state
   const [treeEditMode, setTreeEditMode] = useState(false);
 
+  // Line notation state
+  const [hideRootFromLine, setHideRootFromLine] = useState(false);
+
   // Leaks panel visibility
   const [leaksPanelVisible, setLeaksPanelVisible] = useState(true);
 
@@ -830,6 +833,8 @@ export default function Home() {
                 onImportProfile={handleImportProfile}
                 editMode={treeEditMode}
                 onToggleEditMode={() => setTreeEditMode(!treeEditMode)}
+                hideRootFromLine={hideRootFromLine}
+                onToggleHideRootFromLine={() => setHideRootFromLine(!hideRootFromLine)}
                 onAddNode={handleAddNode}
                 onAddParentNode={handleAddParentNode}
                 onDeleteNode={handleDeleteNode}
@@ -846,6 +851,7 @@ export default function Home() {
               visible={leaksPanelVisible}
               onToggleVisible={() => setLeaksPanelVisible(!leaksPanelVisible)}
               onLeakClick={handleLeakClick}
+              hideRootFromLine={hideRootFromLine}
             />
           </>
         ) : (

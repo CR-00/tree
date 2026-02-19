@@ -15,7 +15,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import { ProcessedSpot, TreeNode as TreeNodeType, actionLabels, streetLabels, Profile, Player, Action, Street } from '@/types';
 import { ActionNode } from './ActionNode';
-import { IconLock, IconLockOpen, IconZoomReset } from '@tabler/icons-react';
+import { IconLock, IconLockOpen, IconZoomReset, IconRouteOff } from '@tabler/icons-react';
 import { modals } from '@mantine/modals';
 import { Text } from '@mantine/core';
 
@@ -86,6 +86,8 @@ interface TreeToolbarProps {
   onImportProfile?: (player: Player) => void;
   editMode?: boolean;
   onToggleEditMode?: () => void;
+  hideRootFromLine?: boolean;
+  onToggleHideRootFromLine?: () => void;
   spotId: string;
 }
 
@@ -103,6 +105,8 @@ function TreeToolbar({
   onImportProfile,
   editMode,
   onToggleEditMode,
+  hideRootFromLine,
+  onToggleHideRootFromLine,
 }: TreeToolbarProps) {
   const { fitView } = useReactFlow();
   const oopProfiles = profiles.filter(p => p.player === 'OOP');
@@ -262,6 +266,15 @@ function TreeToolbar({
           {editMode ? <IconLockOpen size={18} /> : <IconLock size={18} />}
         </button>
       )}
+      {onToggleHideRootFromLine && (
+        <button
+          className={`edit-mode-btn ${hideRootFromLine ? 'active' : ''}`}
+          onClick={onToggleHideRootFromLine}
+          title={hideRootFromLine ? 'Show root in line notation' : 'Hide root from line notation'}
+        >
+          <IconRouteOff size={18} />
+        </button>
+      )}
     </Panel>
   );
 }
@@ -316,6 +329,8 @@ interface TreeViewProps {
   onUpdateNode?: (nodeId: string, action: Action, player: Player, street: Street, sizing?: number) => void;
   onAddParentNode?: (action: Action, player: Player, street: Street, sizing?: number) => void;
   focusTarget?: { nodeId: string; timestamp: number } | null;
+  hideRootFromLine?: boolean;
+  onToggleHideRootFromLine?: () => void;
 }
 
 interface LayoutResult {
@@ -323,7 +338,7 @@ interface LayoutResult {
   edges: Edge[];
 }
 
-function layoutTree(root: TreeNodeType, initialPotSize: number, initialOopCombos: number, initialIpCombos: number): LayoutResult {
+function layoutTree(root: TreeNodeType, initialPotSize: number, initialOopCombos: number, initialIpCombos: number, hideRootFromLine = false): LayoutResult {
   const nodes: Node[] = [];
   const edges: Edge[] = [];
 
@@ -420,8 +435,10 @@ function layoutTree(root: TreeNodeType, initialPotSize: number, initialOopCombos
       : nodeLabel;
 
     // Only append this action to the acting player's path, mirroring LeaksTable logic
-    const newOopPath = node.player === 'OOP' ? [...oopPath, nodeDisplayLabel] : oopPath;
-    const newIpPath = node.player === 'IP' ? [...ipPath, nodeDisplayLabel] : ipPath;
+    const isRoot = parentId === undefined;
+    const includeInPath = !(isRoot && hideRootFromLine);
+    const newOopPath = node.player === 'OOP' && includeInPath ? [...oopPath, nodeDisplayLabel] : oopPath;
+    const newIpPath = node.player === 'IP' && includeInPath ? [...ipPath, nodeDisplayLabel] : ipPath;
     const playerPath = node.player === 'OOP' ? newOopPath : newIpPath;
 
     // Check for fold leaks
@@ -546,8 +563,10 @@ export function TreeView({
   onUpdateNode,
   onAddParentNode,
   focusTarget,
+  hideRootFromLine = false,
+  onToggleHideRootFromLine,
 }: TreeViewProps) {
-  const { nodes, edges } = useMemo(() => layoutTree(spot.tree, spot.potSize, spot.oopCombos, spot.ipCombos), [spot.tree, spot.potSize, spot.oopCombos, spot.ipCombos]);
+  const { nodes, edges } = useMemo(() => layoutTree(spot.tree, spot.potSize, spot.oopCombos, spot.ipCombos, hideRootFromLine), [spot.tree, spot.potSize, spot.oopCombos, spot.ipCombos, hideRootFromLine]);
 
   // Edit mode state
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
@@ -711,6 +730,8 @@ export function TreeView({
           onImportProfile={onImportProfile}
           editMode={editMode}
           onToggleEditMode={onToggleEditMode}
+          hideRootFromLine={hideRootFromLine}
+          onToggleHideRootFromLine={onToggleHideRootFromLine}
         />
 
         <NodeFocuser target={focusTarget ?? null} spotId={spot.id} />
