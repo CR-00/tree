@@ -690,6 +690,81 @@ export function TreeView({
                   Delete
                 </button>
               </div>
+
+              <div className="edit-modal-divider" />
+              <div className="edit-modal-section">
+                <div className="edit-modal-section-label">Add Child Node</div>
+                <div className="edit-modal-field">
+                  <label>Action</label>
+                  <select
+                    className="edit-modal-select"
+                    value={newNodeAction}
+                    onChange={(e) => setNewNodeAction(e.target.value as Action)}
+                  >
+                    <option value="bet">Bet</option>
+                    <option value="check">Check</option>
+                    <option value="raise">Raise</option>
+                    <option value="call">Call</option>
+                    <option value="fold">Fold</option>
+                  </select>
+                </div>
+                <div className="edit-modal-field">
+                  <label>Player</label>
+                  <select
+                    className="edit-modal-select"
+                    value={newNodePlayer}
+                    onChange={(e) => setNewNodePlayer(e.target.value as Player)}
+                  >
+                    <option value="OOP">OOP</option>
+                    <option value="IP">IP</option>
+                  </select>
+                </div>
+                <div className="edit-modal-field">
+                  <label>Street</label>
+                  <select
+                    className="edit-modal-select"
+                    value={newNodeStreet}
+                    onChange={(e) => setNewNodeStreet(e.target.value as Street)}
+                  >
+                    <option value="flop">Flop</option>
+                    <option value="turn">Turn</option>
+                    <option value="river">River</option>
+                  </select>
+                </div>
+                {newNodeAction === 'raise' && (
+                  <div className="edit-modal-field">
+                    <label>Raise size (x facing bet)</label>
+                    <input
+                      type="number"
+                      className="edit-modal-input"
+                      value={newNodeSizing}
+                      onChange={(e) => setNewNodeSizing(Number(e.target.value) || 3)}
+                      min={2}
+                      max={100}
+                      step={0.5}
+                    />
+                  </div>
+                )}
+                {newNodeAction === 'bet' && (
+                  <div className="edit-modal-field">
+                    <label>Bet size (% of pot)</label>
+                    <input
+                      type="number"
+                      className="edit-modal-input"
+                      value={newNodeSizing}
+                      onChange={(e) => setNewNodeSizing(Number(e.target.value) || 50)}
+                      min={1}
+                      max={500}
+                      step={25}
+                    />
+                  </div>
+                )}
+              </div>
+              <div className="edit-modal-actions">
+                <button className="edit-modal-btn save" onClick={handleAddNode} disabled={!onAddNode}>
+                  Add Child
+                </button>
+              </div>
             </div>
           </div>
         </div>
