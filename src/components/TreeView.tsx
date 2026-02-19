@@ -15,7 +15,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import { ProcessedSpot, TreeNode as TreeNodeType, actionLabels, streetLabels, Profile, Player, Action, Street } from '@/types';
 import { ActionNode } from './ActionNode';
-import { IconLock, IconLockOpen } from '@tabler/icons-react';
+import { IconLock, IconLockOpen, IconZoomReset } from '@tabler/icons-react';
 
 const EDGE_RADIUS = 8;
 
@@ -69,6 +69,200 @@ const nodeTypes = {
 const edgeTypes = {
   tree: TreeEdge,
 };
+
+interface TreeToolbarProps {
+  onToggleSidebar?: () => void;
+  sidebarCollapsed?: boolean;
+  profiles: Profile[];
+  oopProfileId?: string;
+  ipProfileId?: string;
+  onOOPProfileChange?: (profileId: string) => void;
+  onIPProfileChange?: (profileId: string) => void;
+  onEditProfile?: (profile: Profile) => void;
+  onCreateProfile?: (player: Player) => void;
+  onExportProfile?: (profile: Profile) => void;
+  onImportProfile?: (player: Player) => void;
+  editMode?: boolean;
+  onToggleEditMode?: () => void;
+  spotId: string;
+}
+
+function TreeToolbar({
+  onToggleSidebar,
+  sidebarCollapsed,
+  profiles,
+  oopProfileId,
+  ipProfileId,
+  onOOPProfileChange,
+  onIPProfileChange,
+  onEditProfile,
+  onCreateProfile,
+  onExportProfile,
+  onImportProfile,
+  editMode,
+  onToggleEditMode,
+}: TreeToolbarProps) {
+  const { fitView } = useReactFlow();
+  const oopProfiles = profiles.filter(p => p.player === 'OOP');
+  const ipProfiles = profiles.filter(p => p.player === 'IP');
+  const selectedOOP = oopProfiles.find(p => p.id === oopProfileId);
+  const selectedIP = ipProfiles.find(p => p.id === ipProfileId);
+
+  return (
+    <Panel position="top-left" className="tree-panels">
+      {onToggleSidebar && (
+        <button
+          className="sidebar-toggle-btn"
+          onClick={onToggleSidebar}
+          title={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
+        >
+          {sidebarCollapsed ? '☰' : '«'}
+        </button>
+      )}
+      <button
+        className="sidebar-toggle-btn"
+        onClick={() => fitView({ duration: 400, padding: 0.2 })}
+        title="Reset zoom"
+      >
+        <IconZoomReset size={18} />
+      </button>
+      <div className="legend-panel">
+        <div className="legend-section">
+          <span className="legend-section-label">Leaks:</span>
+          <div className="legend-item">
+            <div className="legend-color overfold" />
+            <span>Overfold</span>
+          </div>
+          <div className="legend-item">
+            <div className="legend-color underfold" />
+            <span>Underfold</span>
+          </div>
+          <div className="legend-item">
+            <div className="legend-color overbluff" />
+            <span>Overbluff</span>
+          </div>
+          <div className="legend-item">
+            <div className="legend-color underbluff" />
+            <span>Underbluff</span>
+          </div>
+        </div>
+        <div className="legend-divider" />
+        <div className="legend-section">
+          <span className="legend-section-label">Exploits:</span>
+          <div className="legend-item">
+            <div className="legend-color missed-exploit" />
+            <span>Missed</span>
+          </div>
+          <div className="legend-item">
+            <div className="legend-color exploiting" />
+            <span>Exploiting</span>
+          </div>
+        </div>
+      </div>
+      {profiles.length > 0 && (
+        <div className="profiles-panel">
+          <div className="profile-row">
+            <span className="profile-badge oop">OOP</span>
+            <select
+              className="profile-select"
+              value={oopProfileId || ''}
+              onChange={(e) => onOOPProfileChange?.(e.target.value)}
+            >
+              {oopProfiles.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+            <button
+              className="profile-menu-btn"
+              onClick={() => selectedOOP && onEditProfile?.(selectedOOP)}
+              title="Edit profile"
+            >
+              ✎
+            </button>
+            <button
+              className="profile-menu-btn"
+              onClick={() => onCreateProfile?.('OOP')}
+              title="New profile"
+            >
+              +
+            </button>
+            {onExportProfile && selectedOOP && (
+              <button
+                className="profile-menu-btn"
+                onClick={() => onExportProfile(selectedOOP)}
+                title="Export profile"
+              >
+                ↓
+              </button>
+            )}
+            {onImportProfile && (
+              <button
+                className="profile-menu-btn"
+                onClick={() => onImportProfile('OOP')}
+                title="Import profile"
+              >
+                ↑
+              </button>
+            )}
+          </div>
+          <div className="profile-row">
+            <span className="profile-badge ip">IP</span>
+            <select
+              className="profile-select"
+              value={ipProfileId || ''}
+              onChange={(e) => onIPProfileChange?.(e.target.value)}
+            >
+              {ipProfiles.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+            <button
+              className="profile-menu-btn"
+              onClick={() => selectedIP && onEditProfile?.(selectedIP)}
+              title="Edit profile"
+            >
+              ✎
+            </button>
+            <button
+              className="profile-menu-btn"
+              onClick={() => onCreateProfile?.('IP')}
+              title="New profile"
+            >
+              +
+            </button>
+            {onExportProfile && selectedIP && (
+              <button
+                className="profile-menu-btn"
+                onClick={() => onExportProfile(selectedIP)}
+                title="Export profile"
+              >
+                ↓
+              </button>
+            )}
+            {onImportProfile && (
+              <button
+                className="profile-menu-btn"
+                onClick={() => onImportProfile('IP')}
+                title="Import profile"
+              >
+                ↑
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+      {onToggleEditMode && (
+        <button
+          className={`edit-mode-btn ${editMode ? 'active' : ''}`}
+          onClick={onToggleEditMode}
+          title={editMode ? 'Lock tree' : 'Edit tree'}
+        >
+          {editMode ? <IconLockOpen size={18} /> : <IconLock size={18} />}
+        </button>
+      )}
+    </Panel>
+  );
+}
 
 function NodeFocuser({ target, spotId }: { target: { nodeId: string; timestamp: number } | null; spotId: string }) {
   const { fitView } = useReactFlow();
@@ -347,11 +541,6 @@ export function TreeView({
 }: TreeViewProps) {
   const { nodes, edges } = useMemo(() => layoutTree(spot.tree, spot.potSize, spot.oopCombos, spot.ipCombos), [spot.tree, spot.potSize, spot.oopCombos, spot.ipCombos]);
 
-  const oopProfiles = profiles.filter(p => p.player === 'OOP');
-  const ipProfiles = profiles.filter(p => p.player === 'IP');
-  const selectedOOP = oopProfiles.find(p => p.id === oopProfileId);
-  const selectedIP = ipProfiles.find(p => p.id === ipProfileId);
-
   // Edit mode state
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -452,151 +641,22 @@ export function TreeView({
         minZoom={0.2}
         maxZoom={2}
       >
-        <Panel position="top-left" className="tree-panels">
-          {onToggleSidebar && (
-            <button
-              className="sidebar-toggle-btn"
-              onClick={onToggleSidebar}
-              title={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
-            >
-              {sidebarCollapsed ? '☰' : '«'}
-            </button>
-          )}
-          <div className="legend-panel">
-            <div className="legend-section">
-              <span className="legend-section-label">Leaks:</span>
-              <div className="legend-item">
-                <div className="legend-color overfold" />
-                <span>Overfold</span>
-              </div>
-              <div className="legend-item">
-                <div className="legend-color underfold" />
-                <span>Underfold</span>
-              </div>
-              <div className="legend-item">
-                <div className="legend-color overbluff" />
-                <span>Overbluff</span>
-              </div>
-              <div className="legend-item">
-                <div className="legend-color underbluff" />
-                <span>Underbluff</span>
-              </div>
-            </div>
-            <div className="legend-divider" />
-            <div className="legend-section">
-              <span className="legend-section-label">Exploits:</span>
-              <div className="legend-item">
-                <div className="legend-color missed-exploit" />
-                <span>Missed</span>
-              </div>
-              <div className="legend-item">
-                <div className="legend-color exploiting" />
-                <span>Exploiting</span>
-              </div>
-            </div>
-          </div>
-          {profiles.length > 0 && (
-            <div className="profiles-panel">
-              <div className="profile-row">
-                <span className="profile-badge oop">OOP</span>
-                <select
-                  className="profile-select"
-                  value={oopProfileId || ''}
-                  onChange={(e) => onOOPProfileChange?.(e.target.value)}
-                >
-                  {oopProfiles.map(p => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
-                <button
-                  className="profile-menu-btn"
-                  onClick={() => selectedOOP && onEditProfile?.(selectedOOP)}
-                  title="Edit profile"
-                >
-                  ✎
-                </button>
-                <button
-                  className="profile-menu-btn"
-                  onClick={() => onCreateProfile?.('OOP')}
-                  title="New profile"
-                >
-                  +
-                </button>
-                {onExportProfile && selectedOOP && (
-                  <button
-                    className="profile-menu-btn"
-                    onClick={() => onExportProfile(selectedOOP)}
-                    title="Export profile"
-                  >
-                    ↓
-                  </button>
-                )}
-                {onImportProfile && (
-                  <button
-                    className="profile-menu-btn"
-                    onClick={() => onImportProfile('OOP')}
-                    title="Import profile"
-                  >
-                    ↑
-                  </button>
-                )}
-              </div>
-              <div className="profile-row">
-                <span className="profile-badge ip">IP</span>
-                <select
-                  className="profile-select"
-                  value={ipProfileId || ''}
-                  onChange={(e) => onIPProfileChange?.(e.target.value)}
-                >
-                  {ipProfiles.map(p => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
-                <button
-                  className="profile-menu-btn"
-                  onClick={() => selectedIP && onEditProfile?.(selectedIP)}
-                  title="Edit profile"
-                >
-                  ✎
-                </button>
-                <button
-                  className="profile-menu-btn"
-                  onClick={() => onCreateProfile?.('IP')}
-                  title="New profile"
-                >
-                  +
-                </button>
-                {onExportProfile && selectedIP && (
-                  <button
-                    className="profile-menu-btn"
-                    onClick={() => onExportProfile(selectedIP)}
-                    title="Export profile"
-                  >
-                    ↓
-                  </button>
-                )}
-                {onImportProfile && (
-                  <button
-                    className="profile-menu-btn"
-                    onClick={() => onImportProfile('IP')}
-                    title="Import profile"
-                  >
-                    ↑
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-          {onToggleEditMode && (
-            <button
-              className={`edit-mode-btn ${editMode ? 'active' : ''}`}
-              onClick={onToggleEditMode}
-              title={editMode ? 'Lock tree' : 'Edit tree'}
-            >
-              {editMode ? <IconLockOpen size={18} /> : <IconLock size={18} />}
-            </button>
-          )}
-        </Panel>
+        <TreeToolbar
+          spotId={spot.id}
+          onToggleSidebar={onToggleSidebar}
+          sidebarCollapsed={sidebarCollapsed}
+          profiles={profiles}
+          oopProfileId={oopProfileId}
+          ipProfileId={ipProfileId}
+          onOOPProfileChange={onOOPProfileChange}
+          onIPProfileChange={onIPProfileChange}
+          onEditProfile={onEditProfile}
+          onCreateProfile={onCreateProfile}
+          onExportProfile={onExportProfile}
+          onImportProfile={onImportProfile}
+          editMode={editMode}
+          onToggleEditMode={onToggleEditMode}
+        />
 
         <NodeFocuser target={focusTarget ?? null} spotId={spot.id} />
       </ReactFlow>
