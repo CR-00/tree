@@ -76,8 +76,9 @@ function findLeaks(
 ): Leak[] {
   const leaks: Leak[] = [];
 
-  // Calculate reach probability
-  const reach = parentReach * node.frequency;
+  // Reach: how often we arrive at this decision point (excludes this node's own frequency)
+  const reach = parentReach;
+  const childReach = parentReach * node.frequency;
 
   // Calculate combos
   const oopCombos = node.player === 'OOP' ? parentOopCombos * node.frequency : parentOopCombos;
@@ -156,7 +157,7 @@ function findLeaks(
 
   // Recurse into children
   for (const child of node.children) {
-    leaks.push(...findLeaks(child, initialPotSize, initialOopCombos, initialIpCombos, newOopPath, newIpPath, reach, newPot, newFacingBet, oopCombos, ipCombos));
+    leaks.push(...findLeaks(child, initialPotSize, initialOopCombos, initialIpCombos, newOopPath, newIpPath, childReach, newPot, newFacingBet, oopCombos, ipCombos));
   }
 
   return leaks;

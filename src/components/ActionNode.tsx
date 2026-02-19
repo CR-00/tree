@@ -123,7 +123,7 @@ export function ActionNode({ data }: ActionNodeProps) {
           <span className="pot-badge" title="Current pot size in big blinds">
             {potSize.toFixed(2)} BB
           </span>
-          <span className="reach-badge" title="Reach probability - how often this node is reached based on all previous frequencies">
+          <span className="reach-badge" title="Reach probability - how often we arrive at this decision point (does not include this node's own action frequency)">
             R: {reach}%
           </span>
           <span className="combos-badge" title={`Combos — OOP: ${oopCombos.toFixed(1)} | IP: ${ipCombos.toFixed(1)}`}>

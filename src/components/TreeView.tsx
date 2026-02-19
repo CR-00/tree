@@ -400,8 +400,10 @@ function layoutTree(root: TreeNodeType, initialPotSize: number, initialOopCombos
     const subtreeWidth = getSubtreeWidth(node);
     const nodeX = x + subtreeWidth / 2 - nodeWidth / 2;
 
-    // Calculate reach probability (product of frequencies from root)
-    const reachProbability = parentReach * node.frequency;
+    // Reach probability: how often we arrive at this decision point (excludes this node's own frequency)
+    const reachProbability = parentReach;
+    // What to pass to children: how often this node's action was taken
+    const childReach = parentReach * node.frequency;
 
     // Calculate combos: acting player's combos reduce by their frequency
     const oopCombos = node.player === 'OOP' ? parentOopCombos * node.frequency : parentOopCombos;
@@ -504,7 +506,7 @@ function layoutTree(root: TreeNodeType, initialPotSize: number, initialOopCombos
         childX,
         y + nodeHeight + verticalSpacing,
         node.id,
-        reachProbability,
+        childReach,
         newOverbluffs,
         newPot,
         newFacingBet,
