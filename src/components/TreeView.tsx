@@ -338,6 +338,20 @@ interface LayoutResult {
   edges: Edge[];
 }
 
+type PathSegment = { street: string; actions: string[] };
+
+function addToPath(path: PathSegment[], street: string, action: string): PathSegment[] {
+  if (path.length > 0 && path[path.length - 1].street === street) {
+    const last = path[path.length - 1];
+    return [...path.slice(0, -1), { street, actions: [...last.actions, action] }];
+  }
+  return [...path, { street, actions: [action] }];
+}
+
+function formatPath(path: PathSegment[]): string {
+  return path.map(seg => seg.actions.join('')).join(' → ');
+}
+
 function layoutTree(root: TreeNodeType, initialPotSize: number, initialOopCombos: number, initialIpCombos: number, hideRootFromLine = false): LayoutResult {
   const nodes: Node[] = [];
   const edges: Edge[] = [];
@@ -409,8 +423,8 @@ function layoutTree(root: TreeNodeType, initialPotSize: number, initialOopCombos
     facingBet: number = 0,
     parentOopCombos: number = initialOopCombos,
     parentIpCombos: number = initialIpCombos,
-    oopPath: string[] = [],
-    ipPath: string[] = []
+    oopPath: PathSegment[] = [],
+    ipPath: PathSegment[] = []
   ) {
     const subtreeWidth = getSubtreeWidth(node);
     const nodeX = x + subtreeWidth / 2 - nodeWidth / 2;
@@ -437,8 +451,8 @@ function layoutTree(root: TreeNodeType, initialPotSize: number, initialOopCombos
     // Only append this action to the acting player's path, mirroring LeaksTable logic
     const isRoot = parentId === undefined;
     const includeInPath = !(isRoot && hideRootFromLine);
-    const newOopPath = node.player === 'OOP' && includeInPath ? [...oopPath, nodeDisplayLabel] : oopPath;
-    const newIpPath = node.player === 'IP' && includeInPath ? [...ipPath, nodeDisplayLabel] : ipPath;
+    const newOopPath = node.player === 'OOP' && includeInPath ? addToPath(oopPath, node.street, nodeDisplayLabel) : oopPath;
+    const newIpPath = node.player === 'IP' && includeInPath ? addToPath(ipPath, node.street, nodeDisplayLabel) : ipPath;
     const playerPath = node.player === 'OOP' ? newOopPath : newIpPath;
 
     // Check for fold leaks
@@ -492,7 +506,7 @@ function layoutTree(root: TreeNodeType, initialPotSize: number, initialOopCombos
         actionAmount,
         oopCombos,
         ipCombos,
-        line: playerPath.join(' → '),
+        line: formatPath(playerPath),
       },
       sourcePosition: Position.Bottom,
       targetPosition: Position.Top,

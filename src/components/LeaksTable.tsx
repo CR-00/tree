@@ -62,13 +62,27 @@ function calculatePot(
   }
 }
 
+type PathSegment = { street: string; actions: string[] };
+
+function addToPath(path: PathSegment[], street: string, action: string): PathSegment[] {
+  if (path.length > 0 && path[path.length - 1].street === street) {
+    const last = path[path.length - 1];
+    return [...path.slice(0, -1), { street, actions: [...last.actions, action] }];
+  }
+  return [...path, { street, actions: [action] }];
+}
+
+function formatPath(path: PathSegment[]): string {
+  return path.map(seg => seg.actions.join('')).join(' → ');
+}
+
 function findLeaks(
   node: TreeNode,
   initialPotSize: number,
   initialOopCombos: number,
   initialIpCombos: number,
-  oopPath: string[] = [],
-  ipPath: string[] = [],
+  oopPath: PathSegment[] = [],
+  ipPath: PathSegment[] = [],
   parentReach: number = 1,
   pot: number = initialPotSize,
   facingBet: number = 0,
@@ -91,13 +105,20 @@ function findLeaks(
   // Calculate pot after this action
   const { newPot, newFacingBet } = calculatePot(node.action, pot, facingBet, node.sizing);
 
+  // Build sizing-aware label (matches TreeView notation)
+  const nodeLabel = actionLabels[node.action];
+  const hasSizing = (node.action === 'bet' || node.action === 'raise') && node.sizing !== undefined;
+  const nodeDisplayLabel = hasSizing
+    ? node.action === 'raise' ? `${nodeLabel}${node.sizing}X` : `${nodeLabel}${node.sizing}`
+    : nodeLabel;
+
   // Update the appropriate player's path
   const includeInPath = !(isRoot && hideRootFromLine);
   const newOopPath = node.player === 'OOP' && includeInPath
-    ? [...oopPath, actionLabels[node.action]]
+    ? addToPath(oopPath, node.street, nodeDisplayLabel)
     : oopPath;
   const newIpPath = node.player === 'IP' && includeInPath
-    ? [...ipPath, actionLabels[node.action]]
+    ? addToPath(ipPath, node.street, nodeDisplayLabel)
     : ipPath;
 
   // Check for fold leaks
@@ -106,7 +127,7 @@ function findLeaks(
     if (node.frequency > node.gtoFrequency) {
       leaks.push({
         nodeId: node.id,
-        path: playerPath.join(' → '),
+        path: formatPath(playerPath),
         player: node.player,
         type: 'overfold',
         frequency: node.frequency,
@@ -121,7 +142,7 @@ function findLeaks(
     } else if (node.frequency < node.gtoFrequency) {
       leaks.push({
         nodeId: node.id,
-        path: playerPath.join(' → '),
+        path: formatPath(playerPath),
         player: node.player,
         type: 'underfold',
         frequency: node.frequency,
@@ -145,7 +166,7 @@ function findLeaks(
     const isOver = node.weakPercent > node.gtoWeakPercent;
     leaks.push({
       nodeId: node.id,
-      path: playerPath.join(' → '),
+      path: formatPath(playerPath),
       player: node.player,
       type: isOver ? 'overbluff' : 'underbluff',
       frequency: node.weakPercent,
