@@ -336,6 +336,32 @@ export default function Home() {
     }
   }, [selectedSpot]);
 
+  const handleAddParentNode = useCallback(async (action: string, player: Player, street: string, sizing?: number) => {
+    if (!selectedSpot) return;
+
+    const newRoot: BaseTreeNode = {
+      id: `${action}-${Date.now()}`,
+      action: action as BaseTreeNode['action'],
+      player,
+      street: street as BaseTreeNode['street'],
+      ...(sizing !== undefined && { sizing }),
+      children: [selectedSpot.tree as BaseTreeNode],
+    };
+
+    const updatedSpot = { ...selectedSpot, tree: newRoot };
+    setSpots(prev => prev.map(s => s.id === selectedSpot.id ? updatedSpot : s));
+
+    try {
+      await fetch(`/api/spots/${selectedSpot.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedSpot),
+      });
+    } catch (error) {
+      console.error('Failed to add parent node:', error);
+    }
+  }, [selectedSpot]);
+
   const handleDeleteNode = useCallback(async (nodeId: string) => {
     if (!selectedSpot) return;
 
@@ -362,6 +388,52 @@ export default function Home() {
     setSpots(prev => prev.map(s => s.id === selectedSpot.id ? updatedSpot : s));
 
     // Save to API
+    try {
+      await fetch(`/api/spots/${selectedSpot.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedSpot),
+      });
+    } catch (error) {
+      console.error('Failed to delete node:', error);
+    }
+  }, [selectedSpot]);
+
+  const handleDeleteNodeKeepChildren = useCallback(async (nodeId: string) => {
+    if (!selectedSpot) return;
+
+    const root = selectedSpot.tree as BaseTreeNode;
+
+    // Special case: deleting the root — promote its single child to be the new root
+    if (root.id === nodeId) {
+      if (root.children.length !== 1) return;
+      const updatedSpot = { ...selectedSpot, tree: root.children[0] };
+      setSpots(prev => prev.map(s => s.id === selectedSpot.id ? updatedSpot : s));
+      try {
+        await fetch(`/api/spots/${selectedSpot.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatedSpot),
+        });
+      } catch (error) {
+        console.error('Failed to delete node:', error);
+      }
+      return;
+    }
+
+    // For non-root: replace the node with its children in the parent's children list
+    const promoteChildren = (node: BaseTreeNode): BaseTreeNode => ({
+      ...node,
+      children: node.children.flatMap(child =>
+        child.id === nodeId
+          ? child.children
+          : [promoteChildren(child)]
+      ),
+    });
+
+    const updatedTree = promoteChildren(root);
+    const updatedSpot = { ...selectedSpot, tree: updatedTree };
+    setSpots(prev => prev.map(s => s.id === selectedSpot.id ? updatedSpot : s));
     try {
       await fetch(`/api/spots/${selectedSpot.id}`, {
         method: 'PUT',
@@ -759,7 +831,9 @@ export default function Home() {
                 editMode={treeEditMode}
                 onToggleEditMode={() => setTreeEditMode(!treeEditMode)}
                 onAddNode={handleAddNode}
+                onAddParentNode={handleAddParentNode}
                 onDeleteNode={handleDeleteNode}
+                onDeleteNodeKeepChildren={handleDeleteNodeKeepChildren}
                 onUpdateNode={handleUpdateNode}
                 focusTarget={focusTarget}
               />

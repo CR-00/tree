@@ -16,6 +16,8 @@ import '@xyflow/react/dist/style.css';
 import { ProcessedSpot, TreeNode as TreeNodeType, actionLabels, streetLabels, Profile, Player, Action, Street } from '@/types';
 import { ActionNode } from './ActionNode';
 import { IconLock, IconLockOpen, IconZoomReset } from '@tabler/icons-react';
+import { modals } from '@mantine/modals';
+import { Text } from '@mantine/core';
 
 const EDGE_RADIUS = 8;
 
@@ -310,7 +312,9 @@ interface TreeViewProps {
   onToggleEditMode?: () => void;
   onAddNode?: (parentId: string, action: string, player: 'OOP' | 'IP', street: string, sizing?: number) => void;
   onDeleteNode?: (nodeId: string) => void;
+  onDeleteNodeKeepChildren?: (nodeId: string) => void;
   onUpdateNode?: (nodeId: string, action: Action, player: Player, street: Street, sizing?: number) => void;
+  onAddParentNode?: (action: Action, player: Player, street: Street, sizing?: number) => void;
   focusTarget?: { nodeId: string; timestamp: number } | null;
 }
 
@@ -536,7 +540,9 @@ export function TreeView({
   onToggleEditMode,
   onAddNode,
   onDeleteNode,
+  onDeleteNodeKeepChildren,
   onUpdateNode,
+  onAddParentNode,
   focusTarget,
 }: TreeViewProps) {
   const { nodes, edges } = useMemo(() => layoutTree(spot.tree, spot.potSize, spot.oopCombos, spot.ipCombos), [spot.tree, spot.potSize, spot.oopCombos, spot.ipCombos]);
@@ -555,6 +561,15 @@ export function TreeView({
   const [editNodeStreet, setEditNodeStreet] = useState<Street>('flop');
   const [editNodeSizing, setEditNodeSizing] = useState<number>(50);
 
+  // Add parent node state
+  const [parentNodeAction, setParentNodeAction] = useState<Action>('bet');
+  const [parentNodePlayer, setParentNodePlayer] = useState<Player>('OOP');
+  const [parentNodeStreet, setParentNodeStreet] = useState<Street>('flop');
+  const [parentNodeSizing, setParentNodeSizing] = useState<number>(50);
+
+  // Modal tab state
+  const [modalTab, setModalTab] = useState<'edit' | 'add-child' | 'add-parent'>('edit');
+
   // Find the node being edited to get its info
   const editingNodeData = editingNodeId ? nodes.find(n => n.id === editingNodeId)?.data : null;
 
@@ -571,6 +586,7 @@ export function TreeView({
       setEditNodePlayer(data.player);
       setEditNodeStreet(data.rawStreet || 'flop');
       setEditNodeSizing(data.sizing ?? 50);
+      setModalTab('edit');
       setShowAddModal(true);
     } else if (onNodeClick && node.data) {
       const data = node.data as {
@@ -615,8 +631,45 @@ export function TreeView({
   };
 
   const handleDeleteNode = () => {
-    if (editingNodeId && onDeleteNode) {
-      onDeleteNode(editingNodeId);
+    if (!editingNodeId || !onDeleteNode) return;
+    const id = editingNodeId;
+    modals.openConfirmModal({
+      title: 'Delete subtree',
+      children: <Text size="sm">This will remove the node and all nodes beneath it. This cannot be undone.</Text>,
+      labels: { confirm: 'Delete subtree', cancel: 'Cancel' },
+      confirmProps: { color: 'red' },
+      onConfirm: () => {
+        onDeleteNode(id);
+        setShowAddModal(false);
+        setEditingNodeId(null);
+      },
+    });
+  };
+
+  const handleDeleteNodeKeepChildren = () => {
+    if (!editingNodeId || !onDeleteNodeKeepChildren) return;
+    const id = editingNodeId;
+    modals.openConfirmModal({
+      title: 'Delete node',
+      children: <Text size="sm">This will remove the node and promote its children up to its parent.</Text>,
+      labels: { confirm: 'Delete node', cancel: 'Cancel' },
+      confirmProps: { color: 'red' },
+      onConfirm: () => {
+        onDeleteNodeKeepChildren(id);
+        setShowAddModal(false);
+        setEditingNodeId(null);
+      },
+    });
+  };
+
+  const isEditingRoot = editingNodeId === spot.tree.id;
+  // Can only delete-keep-children on root if it has exactly one child (unambiguous promotion)
+  const canDeleteKeepChildren = !isEditingRoot || spot.tree.children.length === 1;
+
+  const handleAddParentNode = () => {
+    if (onAddParentNode) {
+      const sizing = (parentNodeAction === 'bet' || parentNodeAction === 'raise') ? parentNodeSizing : undefined;
+      onAddParentNode(parentNodeAction, parentNodePlayer, parentNodeStreet, sizing);
       setShowAddModal(false);
       setEditingNodeId(null);
     }
@@ -665,166 +718,175 @@ export function TreeView({
       {showAddModal && editingNodeId && (
         <div className="edit-modal-overlay" onClick={() => setShowAddModal(false)}>
           <div className="edit-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="edit-modal-content">
-              <div className="edit-modal-header">
-                <span>Edit Node</span>
-                <button className="edit-modal-close" onClick={() => setShowAddModal(false)}>×</button>
-              </div>
-
-              <div className="edit-modal-section">
-                <div className="edit-modal-field">
-                  <label>Action</label>
-                  <select
-                    className="edit-modal-select"
-                    value={editNodeAction}
-                    onChange={(e) => setEditNodeAction(e.target.value as Action)}
-                  >
-                    <option value="bet">Bet</option>
-                    <option value="check">Check</option>
-                    <option value="raise">Raise</option>
-                    <option value="call">Call</option>
-                    <option value="fold">Fold</option>
-                  </select>
-                </div>
-                <div className="edit-modal-field">
-                  <label>Player</label>
-                  <select
-                    className="edit-modal-select"
-                    value={editNodePlayer}
-                    onChange={(e) => setEditNodePlayer(e.target.value as Player)}
-                  >
-                    <option value="OOP">OOP</option>
-                    <option value="IP">IP</option>
-                  </select>
-                </div>
-                <div className="edit-modal-field">
-                  <label>Street</label>
-                  <select
-                    className="edit-modal-select"
-                    value={editNodeStreet}
-                    onChange={(e) => setEditNodeStreet(e.target.value as Street)}
-                  >
-                    <option value="flop">Flop</option>
-                    <option value="turn">Turn</option>
-                    <option value="river">River</option>
-                  </select>
-                </div>
-                {editNodeAction === 'raise' && (
-                  <div className="edit-modal-field">
-                    <label>Raise size (x facing bet)</label>
-                    <input
-                      type="number"
-                      className="edit-modal-input"
-                      value={editNodeSizing}
-                      onChange={(e) => setEditNodeSizing(Number(e.target.value) || 3)}
-                      min={2}
-                      max={100}
-                      step={0.5}
-                    />
-                  </div>
-                )}
-                {editNodeAction === 'bet' && (
-                  <div className="edit-modal-field">
-                    <label>Bet size (% of pot)</label>
-                    <input
-                      type="number"
-                      className="edit-modal-input"
-                      value={editNodeSizing}
-                      onChange={(e) => setEditNodeSizing(Number(e.target.value) || 50)}
-                      min={1}
-                      max={500}
-                      step={25}
-                    />
-                  </div>
-                )}
-              </div>
-              <div className="edit-modal-actions">
-                <button className="edit-modal-btn save" onClick={handleUpdateNode} disabled={!onUpdateNode}>
-                  Update
+            <div className="edit-modal-header">
+              <div className="edit-modal-tabs">
+                <button
+                  className={`edit-modal-tab ${modalTab === 'edit' ? 'active' : ''}`}
+                  onClick={() => setModalTab('edit')}
+                >
+                  Edit
                 </button>
                 <button
-                  className="edit-modal-btn delete"
-                  onClick={handleDeleteNode}
-                  disabled={editingNodeId === spot.tree.id}
+                  className={`edit-modal-tab ${modalTab === 'add-child' ? 'active' : ''}`}
+                  onClick={() => setModalTab('add-child')}
                 >
-                  Delete
-                </button>
-              </div>
-
-              <div className="edit-modal-divider" />
-              <div className="edit-modal-section">
-                <div className="edit-modal-section-label">Add Child Node</div>
-                <div className="edit-modal-field">
-                  <label>Action</label>
-                  <select
-                    className="edit-modal-select"
-                    value={newNodeAction}
-                    onChange={(e) => setNewNodeAction(e.target.value as Action)}
-                  >
-                    <option value="bet">Bet</option>
-                    <option value="check">Check</option>
-                    <option value="raise">Raise</option>
-                    <option value="call">Call</option>
-                    <option value="fold">Fold</option>
-                  </select>
-                </div>
-                <div className="edit-modal-field">
-                  <label>Player</label>
-                  <select
-                    className="edit-modal-select"
-                    value={newNodePlayer}
-                    onChange={(e) => setNewNodePlayer(e.target.value as Player)}
-                  >
-                    <option value="OOP">OOP</option>
-                    <option value="IP">IP</option>
-                  </select>
-                </div>
-                <div className="edit-modal-field">
-                  <label>Street</label>
-                  <select
-                    className="edit-modal-select"
-                    value={newNodeStreet}
-                    onChange={(e) => setNewNodeStreet(e.target.value as Street)}
-                  >
-                    <option value="flop">Flop</option>
-                    <option value="turn">Turn</option>
-                    <option value="river">River</option>
-                  </select>
-                </div>
-                {newNodeAction === 'raise' && (
-                  <div className="edit-modal-field">
-                    <label>Raise size (x facing bet)</label>
-                    <input
-                      type="number"
-                      className="edit-modal-input"
-                      value={newNodeSizing}
-                      onChange={(e) => setNewNodeSizing(Number(e.target.value) || 3)}
-                      min={2}
-                      max={100}
-                      step={0.5}
-                    />
-                  </div>
-                )}
-                {newNodeAction === 'bet' && (
-                  <div className="edit-modal-field">
-                    <label>Bet size (% of pot)</label>
-                    <input
-                      type="number"
-                      className="edit-modal-input"
-                      value={newNodeSizing}
-                      onChange={(e) => setNewNodeSizing(Number(e.target.value) || 50)}
-                      min={1}
-                      max={500}
-                      step={25}
-                    />
-                  </div>
-                )}
-              </div>
-              <div className="edit-modal-actions">
-                <button className="edit-modal-btn save" onClick={handleAddNode} disabled={!onAddNode}>
                   Add Child
                 </button>
+                {isEditingRoot && onAddParentNode && (
+                  <button
+                    className={`edit-modal-tab ${modalTab === 'add-parent' ? 'active' : ''}`}
+                    onClick={() => setModalTab('add-parent')}
+                  >
+                    Add Parent
+                  </button>
+                )}
               </div>
+              <button className="edit-modal-close" onClick={() => setShowAddModal(false)}>×</button>
+            </div>
+
+            <div className="edit-modal-content">
+              {modalTab === 'edit' && (
+                <>
+                  <div className="edit-modal-section">
+                    <div className="edit-modal-field">
+                      <label>Action</label>
+                      <select className="edit-modal-select" value={editNodeAction} onChange={(e) => setEditNodeAction(e.target.value as Action)}>
+                        <option value="bet">Bet</option>
+                        <option value="check">Check</option>
+                        <option value="raise">Raise</option>
+                        <option value="call">Call</option>
+                        <option value="fold">Fold</option>
+                      </select>
+                    </div>
+                    <div className="edit-modal-field">
+                      <label>Player</label>
+                      <select className="edit-modal-select" value={editNodePlayer} onChange={(e) => setEditNodePlayer(e.target.value as Player)}>
+                        <option value="OOP">OOP</option>
+                        <option value="IP">IP</option>
+                      </select>
+                    </div>
+                    <div className="edit-modal-field">
+                      <label>Street</label>
+                      <select className="edit-modal-select" value={editNodeStreet} onChange={(e) => setEditNodeStreet(e.target.value as Street)}>
+                        <option value="flop">Flop</option>
+                        <option value="turn">Turn</option>
+                        <option value="river">River</option>
+                      </select>
+                    </div>
+                    {editNodeAction === 'raise' && (
+                      <div className="edit-modal-field">
+                        <label>Raise size (x facing bet)</label>
+                        <input type="number" className="edit-modal-input" value={editNodeSizing} onChange={(e) => setEditNodeSizing(Number(e.target.value) || 3)} min={2} max={100} step={0.5} />
+                      </div>
+                    )}
+                    {editNodeAction === 'bet' && (
+                      <div className="edit-modal-field">
+                        <label>Bet size (% of pot)</label>
+                        <input type="number" className="edit-modal-input" value={editNodeSizing} onChange={(e) => setEditNodeSizing(Number(e.target.value) || 50)} min={1} max={500} step={25} />
+                      </div>
+                    )}
+                  </div>
+                  <div className="edit-modal-actions">
+                    <button className="edit-modal-btn save" onClick={handleUpdateNode} disabled={!onUpdateNode}>Update</button>
+                    <button className="edit-modal-btn delete" onClick={handleDeleteNodeKeepChildren} disabled={!onDeleteNodeKeepChildren || !canDeleteKeepChildren} title="Remove this node, promoting its children up">Delete node</button>
+                    <button className="edit-modal-btn delete" onClick={handleDeleteNode} disabled={!onDeleteNode || isEditingRoot} title="Remove this node and everything beneath it">Delete subtree</button>
+                  </div>
+                </>
+              )}
+
+              {modalTab === 'add-child' && (
+                <>
+                  <div className="edit-modal-section">
+                    <div className="edit-modal-field">
+                      <label>Action</label>
+                      <select className="edit-modal-select" value={newNodeAction} onChange={(e) => setNewNodeAction(e.target.value as Action)}>
+                        <option value="bet">Bet</option>
+                        <option value="check">Check</option>
+                        <option value="raise">Raise</option>
+                        <option value="call">Call</option>
+                        <option value="fold">Fold</option>
+                      </select>
+                    </div>
+                    <div className="edit-modal-field">
+                      <label>Player</label>
+                      <select className="edit-modal-select" value={newNodePlayer} onChange={(e) => setNewNodePlayer(e.target.value as Player)}>
+                        <option value="OOP">OOP</option>
+                        <option value="IP">IP</option>
+                      </select>
+                    </div>
+                    <div className="edit-modal-field">
+                      <label>Street</label>
+                      <select className="edit-modal-select" value={newNodeStreet} onChange={(e) => setNewNodeStreet(e.target.value as Street)}>
+                        <option value="flop">Flop</option>
+                        <option value="turn">Turn</option>
+                        <option value="river">River</option>
+                      </select>
+                    </div>
+                    {newNodeAction === 'raise' && (
+                      <div className="edit-modal-field">
+                        <label>Raise size (x facing bet)</label>
+                        <input type="number" className="edit-modal-input" value={newNodeSizing} onChange={(e) => setNewNodeSizing(Number(e.target.value) || 3)} min={2} max={100} step={0.5} />
+                      </div>
+                    )}
+                    {newNodeAction === 'bet' && (
+                      <div className="edit-modal-field">
+                        <label>Bet size (% of pot)</label>
+                        <input type="number" className="edit-modal-input" value={newNodeSizing} onChange={(e) => setNewNodeSizing(Number(e.target.value) || 50)} min={1} max={500} step={25} />
+                      </div>
+                    )}
+                  </div>
+                  <div className="edit-modal-actions">
+                    <button className="edit-modal-btn save" onClick={handleAddNode} disabled={!onAddNode}>Add Child</button>
+                  </div>
+                </>
+              )}
+
+              {modalTab === 'add-parent' && isEditingRoot && onAddParentNode && (
+                <>
+                  <div className="edit-modal-section">
+                    <div className="edit-modal-field">
+                      <label>Action</label>
+                      <select className="edit-modal-select" value={parentNodeAction} onChange={(e) => setParentNodeAction(e.target.value as Action)}>
+                        <option value="bet">Bet</option>
+                        <option value="check">Check</option>
+                        <option value="raise">Raise</option>
+                        <option value="call">Call</option>
+                        <option value="fold">Fold</option>
+                      </select>
+                    </div>
+                    <div className="edit-modal-field">
+                      <label>Player</label>
+                      <select className="edit-modal-select" value={parentNodePlayer} onChange={(e) => setParentNodePlayer(e.target.value as Player)}>
+                        <option value="OOP">OOP</option>
+                        <option value="IP">IP</option>
+                      </select>
+                    </div>
+                    <div className="edit-modal-field">
+                      <label>Street</label>
+                      <select className="edit-modal-select" value={parentNodeStreet} onChange={(e) => setParentNodeStreet(e.target.value as Street)}>
+                        <option value="flop">Flop</option>
+                        <option value="turn">Turn</option>
+                        <option value="river">River</option>
+                      </select>
+                    </div>
+                    {parentNodeAction === 'raise' && (
+                      <div className="edit-modal-field">
+                        <label>Raise size (x facing bet)</label>
+                        <input type="number" className="edit-modal-input" value={parentNodeSizing} onChange={(e) => setParentNodeSizing(Number(e.target.value) || 3)} min={2} max={100} step={0.5} />
+                      </div>
+                    )}
+                    {parentNodeAction === 'bet' && (
+                      <div className="edit-modal-field">
+                        <label>Bet size (% of pot)</label>
+                        <input type="number" className="edit-modal-input" value={parentNodeSizing} onChange={(e) => setParentNodeSizing(Number(e.target.value) || 50)} min={1} max={500} step={25} />
+                      </div>
+                    )}
+                  </div>
+                  <div className="edit-modal-actions">
+                    <button className="edit-modal-btn save" onClick={handleAddParentNode}>Add Parent</button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>

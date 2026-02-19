@@ -1,6 +1,7 @@
 import '@mantine/core/styles.css';
 import './globals.css';
 import { ColorSchemeScript, MantineProvider, createTheme } from '@mantine/core';
+import { ModalsProvider } from '@mantine/modals';
 import { SessionProvider } from 'next-auth/react';
 import type { Metadata } from 'next';
 
@@ -26,7 +27,9 @@ export default function RootLayout({
       <body>
         <SessionProvider>
           <MantineProvider theme={theme} defaultColorScheme="dark">
-            {children}
+            <ModalsProvider modalProps={{ zIndex: 1100 }}>
+              {children}
+            </ModalsProvider>
           </MantineProvider>
         </SessionProvider>
       </body>

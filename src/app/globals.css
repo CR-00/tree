@@ -553,21 +553,51 @@ body {
   border-radius: 12px;
   border: 1px solid #373a40;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-  min-width: 300px;
+  width: 520px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
 }
 
 .edit-modal-content {
   padding: 20px;
+  overflow-y: auto;
 }
 
 .edit-modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
-  font-weight: 600;
-  font-size: 16px;
+  padding: 0 16px;
+  border-bottom: 1px solid #373a40;
+  flex-shrink: 0;
+}
+
+.edit-modal-tabs {
+  display: flex;
+  gap: 0;
+}
+
+.edit-modal-tab {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #909296;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 14px 16px 12px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  margin-bottom: -1px;
+}
+
+.edit-modal-tab:hover {
   color: #c1c2c5;
+}
+
+.edit-modal-tab.active {
+  color: #fd7e14;
+  border-bottom-color: #fd7e14;
 }
 
 .edit-modal-close {
