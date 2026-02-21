@@ -357,9 +357,9 @@ function layoutTree(root: TreeNodeType, initialPotSize: number, initialOopCombos
   const edges: Edge[] = [];
 
   const nodeWidth = 340;
-  const nodeHeight = 115;
+  const nodeHeight = 145;
   const horizontalSpacing = 40;
-  const verticalSpacing = 60;
+  const verticalSpacing = 90;
 
   // First pass: calculate subtree widths
   function getSubtreeWidth(node: TreeNodeType): number {

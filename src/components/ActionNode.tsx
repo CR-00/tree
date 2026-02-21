@@ -75,12 +75,22 @@ export function ActionNode({ data }: ActionNodeProps) {
   const reach = (reachProbability * 100).toFixed(1);
   const hasWeak = weakPercent !== undefined && gtoWeakPercent !== undefined;
   const hasSizing = (action === 'bet' || action === 'raise') && sizing !== undefined;
+  const showActionAmount = actionAmount !== undefined && actionAmount > 0;
+
+  // Equity calculations
+  const isBetRaise = action === 'bet' || action === 'raise';
+  const requiredFoldEquity =
+    isBetRaise && actionAmount !== undefined && potSize > 0
+      ? Math.round((actionAmount / potSize) * 100)
+      : null;
 
   // Format action label with sizing if applicable
-  // Bets show % of pot (e.g., B50), raises show multiplier (e.g., R3.5x)
   const displayLabel = hasSizing
     ? action === 'raise' ? `${label}${sizing}X` : `${label}${sizing}`
     : label;
+
+  const actionAmountLabel =
+    action === 'raise' ? 'Raise' : action === 'bet' ? 'Bet' : 'Call';
 
   // Get comparison classes for color coding
   const freqCompare = getFreqCompareClass(freq, gto);
@@ -93,18 +103,10 @@ export function ActionNode({ data }: ActionNodeProps) {
       <Handle type="target" position={Position.Top} className="handle" />
 
       <div className="action-card-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-          <span className="action-label" title={`Action: ${action}${hasSizing ? (action === 'raise' ? ` at ${sizing}x facing bet` : ` at ${sizing}% of pot`) : ''}`}>
-            {displayLabel}
+        <div className="action-label-group">
+          <span className="action-label" title={line || displayLabel}>
+            {line || displayLabel}
           </span>
-          {line && (
-            <div className="line-tooltip-wrapper">
-              <span className="line-tooltip-trigger">⋯</span>
-              <div className="line-tooltip-popup">{line}</div>
-            </div>
-          )}
-        </div>
-        <div className="header-badges">
           {isMissedExploit && (
             <span className="exploit-badge missed" title="Missed exploit opportunity - opponent is overbluffing but you're folding too much">
               MISS
@@ -115,20 +117,8 @@ export function ActionNode({ data }: ActionNodeProps) {
               EXPLOIT
             </span>
           )}
-          {hasSizing && actionAmount !== undefined && (
-            <span className="sizing-badge" title={`${action === 'raise' ? 'Raise' : 'Bet'} size: ${actionAmount.toFixed(2)} BB`}>
-              {actionAmount.toFixed(2)} BB
-            </span>
-          )}
-          <span className="pot-badge" title="Current pot size in big blinds">
-            {potSize.toFixed(2)} BB
-          </span>
-          <span className="reach-badge" title="Reach probability - how often we arrive at this decision point (does not include this node's own action frequency)">
-            R: {reach}%
-          </span>
-          <span className="combos-badge" title={`Combos — OOP: ${oopCombos.toFixed(1)} | IP: ${ipCombos.toFixed(1)}`}>
-            {(player === 'OOP' ? oopCombos : ipCombos).toFixed(1)}c
-          </span>
+        </div>
+        <div className="header-badges">
           <span className={`street-badge ${street.toLowerCase()}`} title={`Street: ${street === 'F' ? 'Flop' : street === 'T' ? 'Turn' : 'River'}`}>
             {street}
           </span>
@@ -136,6 +126,33 @@ export function ActionNode({ data }: ActionNodeProps) {
             {player}
           </span>
         </div>
+      </div>
+
+      <div className="card-meta-row">
+        <div className="meta-item" title="Current pot size in big blinds">
+          <span className="meta-label">Pot</span>
+          <span className="meta-value">{potSize.toFixed(1)} BB</span>
+        </div>
+        {showActionAmount && (
+          <div className="meta-item" title={`${actionAmountLabel} size: ${actionAmount!.toFixed(2)} BB`}>
+            <span className="meta-label">{actionAmountLabel}</span>
+            <span className="meta-value">{actionAmount!.toFixed(1)} BB</span>
+          </div>
+        )}
+        <div className="meta-item" title="Reach probability - how often we arrive at this decision point (does not include this node's own action frequency)">
+          <span className="meta-label">Reach</span>
+          <span className="meta-value">{reach}%</span>
+        </div>
+        <div className="meta-item" title={`Combos — OOP: ${oopCombos.toFixed(1)} | IP: ${ipCombos.toFixed(1)}`}>
+          <span className="meta-label">Combos</span>
+          <span className="meta-value">{(player === 'OOP' ? oopCombos : ipCombos).toFixed(1)}</span>
+        </div>
+        {requiredFoldEquity !== null && (
+          <div className="meta-item" title={`Required Fold Equity: Opponent must fold at least ${requiredFoldEquity}% of the time for a bluff to be profitable (bet / (pot + bet))`}>
+            <span className="meta-label">Req. FE</span>
+            <span className="meta-value">{requiredFoldEquity}%</span>
+          </div>
+        )}
       </div>
 
       <div className="action-card-stats">
