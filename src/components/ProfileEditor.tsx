@@ -24,6 +24,8 @@ interface ProfileEditorProps {
   tree: BaseTreeNode;
   onSave: (profile: Omit<Profile, 'spotId'>) => void;
   player: Player;
+  onExport?: () => void;
+  onImport?: () => void;
 }
 
 // Flatten tree to get all nodes for a specific player
@@ -50,6 +52,8 @@ export function ProfileEditor({
   tree,
   onSave,
   player,
+  onExport,
+  onImport,
 }: ProfileEditorProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -237,13 +241,27 @@ export function ProfileEditor({
           </Table>
         </ScrollArea>
 
-        <Group justify="flex-end" mt="md">
-          <Button variant="subtle" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button onClick={handleSave} disabled={!name.trim()}>
-            Save Profile
-          </Button>
+        <Group justify="space-between" mt="md">
+          <Group gap="xs">
+            {onExport && profile && (
+              <Button variant="subtle" color="gray" onClick={onExport}>
+                Export
+              </Button>
+            )}
+            {onImport && (
+              <Button variant="subtle" color="gray" onClick={onImport}>
+                Import
+              </Button>
+            )}
+          </Group>
+          <Group gap="xs">
+            <Button variant="subtle" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button onClick={handleSave} disabled={!name.trim()}>
+              Save Profile
+            </Button>
+          </Group>
         </Group>
       </Stack>
     </Modal>

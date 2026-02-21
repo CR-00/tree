@@ -9,7 +9,7 @@ interface Leak {
   nodeId: string;
   path: string;
   player: 'OOP' | 'IP';
-  type: 'overfold' | 'underfold' | 'overbluff' | 'underbluff';
+  type: 'overfold' | 'underfold' | 'overbluff' | 'underbluff' | 'float';
   frequency: number;
   gtoFrequency: number;
   diff: number;
@@ -18,6 +18,7 @@ interface Leak {
   potSize: number;
   combos: number;
   relDiff: number;
+  floatEV?: number;
 }
 
 interface LeaksTableProps {
@@ -180,6 +181,53 @@ function findLeaks(
     });
   }
 
+  // Check for float opportunities at call nodes.
+  // The leak belongs to the *opponent* (who check-folds too much), not the caller.
+  if (node.action === 'call') {
+    const callAmount = facingBet;
+    const callPot = newPot;
+    const callerPlayer = node.player;
+    const opponentPlayer = callerPlayer === 'OOP' ? 'IP' : 'OOP';
+    const opponentPath = opponentPlayer === 'OOP' ? newOopPath : newIpPath;
+    const opponentCombos = opponentPlayer === 'OOP' ? oopCombos : ipCombos;
+
+    let bestFloatEV: number | undefined;
+    for (const checkChild of node.children) {
+      if (checkChild.action !== 'check') continue;
+      const checkFreq = checkChild.frequency;
+      for (const betChild of checkChild.children) {
+        if (betChild.player !== callerPlayer || betChild.action !== 'bet') continue;
+        const betAmount = callPot * (betChild.sizing || 50) / 100;
+        for (const foldChild of betChild.children) {
+          if (foldChild.action !== 'fold' || foldChild.player === callerPlayer) continue;
+          const foldFreq = foldChild.frequency;
+          const floatEV = checkFreq * (foldFreq * callPot - (1 - foldFreq) * betAmount) - callAmount;
+          if (floatEV > 0 && (bestFloatEV === undefined || floatEV > bestFloatEV)) {
+            bestFloatEV = floatEV;
+          }
+        }
+      }
+    }
+
+    if (bestFloatEV !== undefined) {
+      leaks.push({
+        nodeId: node.id,
+        path: formatPath(opponentPath),
+        player: opponentPlayer,
+        type: 'float',
+        frequency: 0,
+        gtoFrequency: 0,
+        diff: bestFloatEV,
+        reach,
+        street: node.street,
+        potSize: callPot,
+        combos: opponentCombos,
+        relDiff: 0,
+        floatEV: bestFloatEV,
+      });
+    }
+  }
+
   // Recurse into children
   for (const child of node.children) {
     leaks.push(...findLeaks(child, initialPotSize, initialOopCombos, initialIpCombos, newOopPath, newIpPath, childReach, newPot, newFacingBet, oopCombos, ipCombos, false, hideRootFromLine));
@@ -226,16 +274,16 @@ export function LeaksTable({ tree, initialPotSize, initialOopCombos, initialIpCo
   const handleCopy = useCallback((leaks: Leak[]) => {
     const headers = ['Type', 'Street', 'Line', 'Pot (BB)', 'Reach %', 'Combos', 'Actual %', 'GTO %', 'Diff %', 'Rel. Diff %'];
     const rows = leaks.map(l => [
-      l.type === 'overfold' ? 'Overfold' : l.type === 'underfold' ? 'Underfold' : l.type === 'overbluff' ? 'Overbluff' : 'Underbluff',
+      l.type === 'overfold' ? 'Overfold' : l.type === 'underfold' ? 'Underfold' : l.type === 'overbluff' ? 'Overbluff' : l.type === 'underbluff' ? 'Underbluff' : 'Float',
       streetLabels[l.street],
       l.path,
       l.potSize.toFixed(1),
       (l.reach * 100).toFixed(1),
       l.combos.toFixed(1),
-      Math.round(l.frequency * 100).toString(),
-      Math.round(l.gtoFrequency * 100).toString(),
-      `${l.type === 'overfold' || l.type === 'overbluff' ? '+' : '-'}${Math.round(l.diff * 100)}`,
-      Math.round(l.relDiff * 100).toString(),
+      l.type === 'float' ? '-' : Math.round(l.frequency * 100).toString(),
+      l.type === 'float' ? '-' : Math.round(l.gtoFrequency * 100).toString(),
+      l.type === 'float' ? `+${l.floatEV!.toFixed(2)} BB` : `${l.type === 'overfold' || l.type === 'overbluff' ? '+' : '-'}${Math.round(l.diff * 100)}%`,
+      l.type === 'float' ? '-' : Math.round(l.relDiff * 100).toString(),
     ]);
     const tsv = [headers, ...rows].map(r => r.join('\t')).join('\n');
     navigator.clipboard.writeText(tsv).then(() => {
@@ -345,7 +393,7 @@ export function LeaksTable({ tree, initialPotSize, initialOopCombos, initialIpCo
               style={onLeakClick ? { cursor: 'pointer' } : undefined}
             >
               <Table.Td className={`leak-type-${leak.type}`}>
-                {leak.type === 'overfold' ? 'Overfold' : leak.type === 'underfold' ? 'Underfold' : leak.type === 'overbluff' ? 'Overbluff' : 'Underbluff'}
+                {leak.type === 'overfold' ? 'Overfold' : leak.type === 'underfold' ? 'Underfold' : leak.type === 'overbluff' ? 'Overbluff' : leak.type === 'underbluff' ? 'Underbluff' : 'Float'}
               </Table.Td>
               <Table.Td>
                 <span className={`street-pill ${leak.street}`}>
@@ -363,12 +411,14 @@ export function LeaksTable({ tree, initialPotSize, initialOopCombos, initialIpCo
               <Table.Td>{leak.potSize.toFixed(1)} BB</Table.Td>
               <Table.Td>{(leak.reach * 100).toFixed(1)}%</Table.Td>
               <Table.Td>{leak.combos.toFixed(1)}</Table.Td>
-              <Table.Td>{Math.round(leak.frequency * 100)}%</Table.Td>
-              <Table.Td>{Math.round(leak.gtoFrequency * 100)}%</Table.Td>
+              <Table.Td>{leak.type === 'float' ? '—' : `${Math.round(leak.frequency * 100)}%`}</Table.Td>
+              <Table.Td>{leak.type === 'float' ? '—' : `${Math.round(leak.gtoFrequency * 100)}%`}</Table.Td>
               <Table.Td className={`leak-type-${leak.type}`}>
-                {leak.type === 'overfold' || leak.type === 'overbluff' ? '+' : '-'}{Math.round(leak.diff * 100)}%
+                {leak.type === 'float'
+                  ? `+${leak.floatEV!.toFixed(1)} BB`
+                  : `${leak.type === 'overfold' || leak.type === 'overbluff' ? '+' : '-'}${Math.round(leak.diff * 100)}%`}
               </Table.Td>
-              <Table.Td>{Math.round(leak.relDiff * 100)}%</Table.Td>
+              <Table.Td>{leak.type === 'float' ? '—' : `${Math.round(leak.relDiff * 100)}%`}</Table.Td>
             </Table.Tr>
           ))}
         </Table.Tbody>
@@ -380,7 +430,7 @@ export function LeaksTable({ tree, initialPotSize, initialOopCombos, initialIpCo
 
   return (
     <div className="leaks-panel" style={visible ? { height: panelHeight } : undefined}>
-      <div className="leaks-resize-handle" onPointerDown={handleResizeStart} />
+      {visible && <div className="leaks-resize-handle" onPointerDown={handleResizeStart} />}
       <div className="leaks-table-header-bar">
         <Group gap="sm" align="center">
           <ActionIcon
@@ -407,6 +457,7 @@ export function LeaksTable({ tree, initialPotSize, initialOopCombos, initialIpCo
                 { value: 'underfold', label: 'Underfold' },
                 { value: 'overbluff', label: 'Overbluff' },
                 { value: 'underbluff', label: 'Underbluff' },
+                { value: 'float', label: 'Float' },
               ]}
               w={120}
             />

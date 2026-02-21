@@ -829,8 +829,6 @@ export default function Home() {
                 onIPProfileChange={setIPProfileId}
                 onEditProfile={handleEditProfile}
                 onCreateProfile={handleCreateProfile}
-                onExportProfile={handleExportProfile}
-                onImportProfile={handleImportProfile}
                 editMode={treeEditMode}
                 onToggleEditMode={() => setTreeEditMode(!treeEditMode)}
                 hideRootFromLine={hideRootFromLine}
@@ -872,6 +870,8 @@ export default function Home() {
           tree={selectedSpot.tree as BaseTreeNode}
           onSave={handleSaveProfile}
           player={editorPlayer}
+          onExport={editingProfile ? () => handleExportProfile(editingProfile) : undefined}
+          onImport={() => handleImportProfile(editorPlayer)}
         />
       )}
 

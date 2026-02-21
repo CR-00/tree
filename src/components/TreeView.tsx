@@ -15,7 +15,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import { ProcessedSpot, TreeNode as TreeNodeType, actionLabels, streetLabels, Profile, Player, Action, Street } from '@/types';
 import { ActionNode } from './ActionNode';
-import { IconLock, IconLockOpen, IconZoomReset, IconRouteOff } from '@tabler/icons-react';
+import { IconLock, IconLockOpen, IconZoomReset, IconRouteOff, IconCards } from '@tabler/icons-react';
 import { modals } from '@mantine/modals';
 import { Text } from '@mantine/core';
 
@@ -82,12 +82,12 @@ interface TreeToolbarProps {
   onIPProfileChange?: (profileId: string) => void;
   onEditProfile?: (profile: Profile) => void;
   onCreateProfile?: (player: Player) => void;
-  onExportProfile?: (profile: Profile) => void;
-  onImportProfile?: (player: Player) => void;
   editMode?: boolean;
   onToggleEditMode?: () => void;
   hideRootFromLine?: boolean;
   onToggleHideRootFromLine?: () => void;
+  showCombos?: boolean;
+  onToggleShowCombos?: () => void;
   spotId: string;
 }
 
@@ -101,12 +101,12 @@ function TreeToolbar({
   onIPProfileChange,
   onEditProfile,
   onCreateProfile,
-  onExportProfile,
-  onImportProfile,
   editMode,
   onToggleEditMode,
   hideRootFromLine,
   onToggleHideRootFromLine,
+  showCombos,
+  onToggleShowCombos,
 }: TreeToolbarProps) {
   const { fitView } = useReactFlow();
   const oopProfiles = profiles.filter(p => p.player === 'OOP');
@@ -163,6 +163,10 @@ function TreeToolbar({
             <div className="legend-color exploiting" />
             <span>Exploiting</span>
           </div>
+          <div className="legend-item">
+            <div className="legend-color float-opportunity" />
+            <span>Float</span>
+          </div>
         </div>
       </div>
       {profiles.length > 0 && (
@@ -192,24 +196,6 @@ function TreeToolbar({
             >
               +
             </button>
-            {onExportProfile && selectedOOP && (
-              <button
-                className="profile-menu-btn"
-                onClick={() => onExportProfile(selectedOOP)}
-                title="Export profile"
-              >
-                ↓
-              </button>
-            )}
-            {onImportProfile && (
-              <button
-                className="profile-menu-btn"
-                onClick={() => onImportProfile('OOP')}
-                title="Import profile"
-              >
-                ↑
-              </button>
-            )}
           </div>
           <div className="profile-row">
             <span className="profile-badge ip">IP</span>
@@ -236,24 +222,6 @@ function TreeToolbar({
             >
               +
             </button>
-            {onExportProfile && selectedIP && (
-              <button
-                className="profile-menu-btn"
-                onClick={() => onExportProfile(selectedIP)}
-                title="Export profile"
-              >
-                ↓
-              </button>
-            )}
-            {onImportProfile && (
-              <button
-                className="profile-menu-btn"
-                onClick={() => onImportProfile('IP')}
-                title="Import profile"
-              >
-                ↑
-              </button>
-            )}
           </div>
         </div>
       )}
@@ -273,6 +241,15 @@ function TreeToolbar({
           title={hideRootFromLine ? 'Show root in line notation' : 'Hide root from line notation'}
         >
           <IconRouteOff size={18} />
+        </button>
+      )}
+      {onToggleShowCombos && (
+        <button
+          className={`edit-mode-btn ${showCombos ? 'active' : ''}`}
+          onClick={onToggleShowCombos}
+          title={showCombos ? 'Hide combo counts' : 'Show combo counts'}
+        >
+          <IconCards size={18} />
         </button>
       )}
     </Panel>
@@ -319,8 +296,6 @@ interface TreeViewProps {
   onIPProfileChange?: (profileId: string) => void;
   onEditProfile?: (profile: Profile) => void;
   onCreateProfile?: (player: Player) => void;
-  onExportProfile?: (profile: Profile) => void;
-  onImportProfile?: (player: Player) => void;
   editMode?: boolean;
   onToggleEditMode?: () => void;
   onAddNode?: (parentId: string, action: string, player: 'OOP' | 'IP', street: string, sizing?: number) => void;
@@ -352,7 +327,110 @@ function formatPath(path: PathSegment[]): string {
   return path.map(seg => seg.actions.join('')).join(' → ');
 }
 
-function layoutTree(root: TreeNodeType, initialPotSize: number, initialOopCombos: number, initialIpCombos: number, hideRootFromLine = false): LayoutResult {
+function calculatePot(
+  action: string,
+  pot: number,
+  facingBet: number,
+  sizing?: number
+): { newPot: number; newFacingBet: number; actionAmount: number } {
+  switch (action) {
+    case 'bet': {
+      const betAmount = pot * (sizing || 50) / 100;
+      return { newPot: pot + betAmount, newFacingBet: betAmount, actionAmount: betAmount };
+    }
+    case 'raise': {
+      const multiplier = sizing || 3;
+      const raiseTotal = multiplier * facingBet;
+      const newFacing = raiseTotal - facingBet;
+      return { newPot: pot + raiseTotal, newFacingBet: newFacing, actionAmount: raiseTotal };
+    }
+    case 'call':
+      return { newPot: pot + facingBet, newFacingBet: 0, actionAmount: facingBet };
+    case 'check':
+    case 'fold':
+    default:
+      return { newPot: pot, newFacingBet: 0, actionAmount: 0 };
+  }
+}
+
+// Walk the tree and return a map of call node IDs → best float EV (in BB).
+// A profitable float exists at a call node when the opponent subsequently checks,
+// the caller can bet, the opponent folds, and the bluff EV exceeds the call cost.
+function findFloatOpportunities(
+  node: TreeNodeType,
+  pot: number,
+  facingBet: number
+): Map<string, number> {
+  const result = new Map<string, number>();
+  const { newPot, newFacingBet, actionAmount } = calculatePot(node.action, pot, facingBet, node.sizing);
+
+  if (node.action === 'call' && actionAmount > 0) {
+    const callPot = newPot;
+    const callAmount = actionAmount;
+    const callerPlayer = node.player;
+
+    for (const checkNode of node.children) {
+      if (checkNode.action !== 'check' || checkNode.player === callerPlayer) continue;
+      const checkFreq = checkNode.frequency;
+
+      for (const betNode of checkNode.children) {
+        if (betNode.action !== 'bet' || betNode.player !== callerPlayer) continue;
+        const betAmount = callPot * (betNode.sizing ?? 50) / 100;
+
+        for (const foldNode of betNode.children) {
+          if (foldNode.action !== 'fold' || foldNode.player === callerPlayer) continue;
+          const foldFreq = foldNode.frequency;
+          const floatEV = checkFreq * (foldFreq * callPot - (1 - foldFreq) * betAmount) - callAmount;
+
+          if (floatEV > 0) {
+            const existing = result.get(node.id);
+            if (existing === undefined || floatEV > existing) {
+              result.set(node.id, floatEV);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  for (const child of node.children) {
+    for (const [id, ev] of findFloatOpportunities(child, newPot, newFacingBet)) {
+      const existing = result.get(id);
+      if (existing === undefined || ev > existing) result.set(id, ev);
+    }
+  }
+
+  return result;
+}
+
+// For each bet/raise node, compute the EV of a pure bluff against the player's
+// actual fold frequency: EV = fold_freq × potAfterBet − betSize
+function findBluffEVs(
+  node: TreeNodeType,
+  pot: number,
+  facingBet: number
+): Map<string, number> {
+  const result = new Map<string, number>();
+  const { newPot, newFacingBet, actionAmount } = calculatePot(node.action, pot, facingBet, node.sizing);
+
+  if ((node.action === 'bet' || node.action === 'raise') && actionAmount > 0) {
+    const foldChild = node.children.find(c => c.action === 'fold');
+    if (foldChild) {
+      const ev = foldChild.frequency * newPot - actionAmount;
+      result.set(node.id, ev);
+    }
+  }
+
+  for (const child of node.children) {
+    for (const [id, ev] of findBluffEVs(child, newPot, newFacingBet)) {
+      result.set(id, ev);
+    }
+  }
+
+  return result;
+}
+
+function layoutTree(root: TreeNodeType, initialPotSize: number, initialOopCombos: number, initialIpCombos: number, hideRootFromLine = false, showCombos = false): LayoutResult {
   const nodes: Node[] = [];
   const edges: Edge[] = [];
 
@@ -360,6 +438,9 @@ function layoutTree(root: TreeNodeType, initialPotSize: number, initialOopCombos
   const nodeHeight = 145;
   const horizontalSpacing = 40;
   const verticalSpacing = 90;
+
+  const floatOpportunities = findFloatOpportunities(root, initialPotSize, 0);
+  const bluffEVs = findBluffEVs(root, initialPotSize, 0);
 
   // First pass: calculate subtree widths
   function getSubtreeWidth(node: TreeNodeType): number {
@@ -377,38 +458,6 @@ function layoutTree(root: TreeNodeType, initialPotSize: number, initialOopCombos
   interface OverbluffState {
     OOP: boolean;
     IP: boolean;
-  }
-
-  // Calculate pot after an action
-  // pot: current pot before action
-  // facingBet: amount the player faces (0 if no bet to call)
-  // Returns: { newPot, newFacingBet }
-  function calculatePot(
-    action: string,
-    pot: number,
-    facingBet: number,
-    sizing?: number
-  ): { newPot: number; newFacingBet: number; actionAmount: number } {
-    switch (action) {
-      case 'bet': {
-        const betAmount = pot * (sizing || 50) / 100;
-        return { newPot: pot + betAmount, newFacingBet: betAmount, actionAmount: betAmount };
-      }
-      case 'raise': {
-        // Raise to sizing * facingBet (e.g., 3x = raise to 3 times the facing bet)
-        const multiplier = sizing || 3;
-        const raiseTotal = multiplier * facingBet; // total hero puts in
-        const newFacing = raiseTotal - facingBet;  // additional amount opponent must call
-        return { newPot: pot + raiseTotal, newFacingBet: newFacing, actionAmount: raiseTotal };
-      }
-      case 'call': {
-        return { newPot: pot + facingBet, newFacingBet: 0, actionAmount: facingBet };
-      }
-      case 'check':
-      case 'fold':
-      default:
-        return { newPot: pot, newFacingBet: 0, actionAmount: 0 };
-    }
   }
 
   // Second pass: position nodes
@@ -478,6 +527,10 @@ function layoutTree(root: TreeNodeType, initialPotSize: number, initialOopCombos
     // Underfold after opponent overbluff = exploiting (we're calling more correctly)
     const isExploiting = isUnderfold && opponentHasOverbluffed;
 
+    const isFloatOpportunity = floatOpportunities.has(node.id);
+    const floatEV = floatOpportunities.get(node.id);
+    const bluffEV = bluffEVs.get(node.id);
+
     nodes.push({
       id: node.id,
       type: 'action',
@@ -500,12 +553,16 @@ function layoutTree(root: TreeNodeType, initialPotSize: number, initialOopCombos
         isUnderbluff,
         isMissedExploit,
         isExploiting,
+        isFloatOpportunity,
+        floatEV,
+        bluffEV,
         hasChildren: node.children.length > 0,
         potSize: newPot,
         sizing: node.sizing,
         actionAmount,
         oopCombos,
         ipCombos,
+        showCombos,
         line: formatPath(playerPath),
       },
       sourcePosition: Position.Bottom,
@@ -567,8 +624,6 @@ export function TreeView({
   onIPProfileChange,
   onEditProfile,
   onCreateProfile,
-  onExportProfile,
-  onImportProfile,
   editMode = false,
   onToggleEditMode,
   onAddNode,
@@ -580,7 +635,9 @@ export function TreeView({
   hideRootFromLine = false,
   onToggleHideRootFromLine,
 }: TreeViewProps) {
-  const { nodes, edges } = useMemo(() => layoutTree(spot.tree, spot.potSize, spot.oopCombos, spot.ipCombos, hideRootFromLine), [spot.tree, spot.potSize, spot.oopCombos, spot.ipCombos, hideRootFromLine]);
+  const [showCombos, setShowCombos] = useState(false);
+
+  const { nodes, edges } = useMemo(() => layoutTree(spot.tree, spot.potSize, spot.oopCombos, spot.ipCombos, hideRootFromLine, showCombos), [spot.tree, spot.potSize, spot.oopCombos, spot.ipCombos, hideRootFromLine, showCombos]);
 
   // Edit mode state
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
@@ -740,12 +797,12 @@ export function TreeView({
           onIPProfileChange={onIPProfileChange}
           onEditProfile={onEditProfile}
           onCreateProfile={onCreateProfile}
-          onExportProfile={onExportProfile}
-          onImportProfile={onImportProfile}
           editMode={editMode}
           onToggleEditMode={onToggleEditMode}
           hideRootFromLine={hideRootFromLine}
           onToggleHideRootFromLine={onToggleHideRootFromLine}
+          showCombos={showCombos}
+          onToggleShowCombos={() => setShowCombos(s => !s)}
         />
 
         <NodeFocuser target={focusTarget ?? null} spotId={spot.id} />

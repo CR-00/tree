@@ -20,11 +20,15 @@ interface ActionNodeProps {
     isUnderbluff?: boolean;
     isMissedExploit?: boolean;
     isExploiting?: boolean;
+    isFloatOpportunity?: boolean;
+    floatEV?: number;
+    bluffEV?: number;
     potSize: number;
     sizing?: number;
     actionAmount?: number;
     oopCombos: number;
     ipCombos: number;
+    showCombos?: boolean;
     line?: string;
   };
 }
@@ -53,11 +57,15 @@ export function ActionNode({ data }: ActionNodeProps) {
     isUnderbluff,
     isMissedExploit,
     isExploiting,
+    isFloatOpportunity,
+    floatEV,
+    bluffEV,
     potSize,
     sizing,
     actionAmount,
     oopCombos,
     ipCombos,
+    showCombos,
     line,
   } = data;
 
@@ -143,14 +151,30 @@ export function ActionNode({ data }: ActionNodeProps) {
           <span className="meta-label">Reach</span>
           <span className="meta-value">{reach}%</span>
         </div>
-        <div className="meta-item" title={`Combos — OOP: ${oopCombos.toFixed(1)} | IP: ${ipCombos.toFixed(1)}`}>
-          <span className="meta-label">Combos</span>
-          <span className="meta-value">{(player === 'OOP' ? oopCombos : ipCombos).toFixed(1)}</span>
-        </div>
+        {showCombos && (
+          <div className="meta-item" title={`${player} combos at this decision point`}>
+            <span className="meta-label">Combos</span>
+            <span className="meta-value">{(player === 'OOP' ? oopCombos : ipCombos).toFixed(1)}</span>
+          </div>
+        )}
+        {isFloatOpportunity && floatEV !== undefined && (
+          <div className="meta-item" title={`Float EV: the bluffing opportunity on the next street is worth +${floatEV.toFixed(2)} BB, exceeding the call cost`}>
+            <span className="meta-label">Float EV</span>
+            <span className="meta-value float-ev-value">+{floatEV.toFixed(1)}</span>
+          </div>
+        )}
         {requiredFoldEquity !== null && (
           <div className="meta-item" title={`Required Fold Equity: Opponent must fold at least ${requiredFoldEquity}% of the time for a bluff to be profitable (bet / (pot + bet))`}>
             <span className="meta-label">Req. FE</span>
             <span className="meta-value">{requiredFoldEquity}%</span>
+          </div>
+        )}
+        {bluffEV !== undefined && (
+          <div className="meta-item" title={`Bluff EV: expected value of a pure bluff at this node given opponent's actual fold frequency (${bluffEV >= 0 ? '+' : ''}${bluffEV.toFixed(2)} BB)`}>
+            <span className="meta-label">Bluff EV</span>
+            <span className="meta-value" style={{ color: bluffEV >= 0 ? '#69db7c' : '#ff6b6b' }}>
+              {bluffEV >= 0 ? '+' : ''}{bluffEV.toFixed(1)}
+            </span>
           </div>
         )}
       </div>
