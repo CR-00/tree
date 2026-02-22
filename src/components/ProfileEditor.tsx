@@ -15,7 +15,7 @@ import {
   Badge,
   ActionIcon,
 } from '@mantine/core';
-import { IconMaximize, IconMinimize } from '@tabler/icons-react';
+import { IconMaximize, IconMinimize, IconEye } from '@tabler/icons-react';
 import { Profile, BaseTreeNode, Player, actionLabels } from '@/types';
 
 interface ProfileEditorProps {
@@ -27,6 +27,7 @@ interface ProfileEditorProps {
   initialPotSize: number;
   hideRootFromLine?: boolean;
   onSave: (profile: Omit<Profile, 'spotId'>) => void;
+  onNodeClick?: (nodeId: string) => void;
   player: Player;
   onExport?: () => void;
   onImport?: () => void;
@@ -118,6 +119,7 @@ export function ProfileEditor({
   initialPotSize,
   hideRootFromLine = false,
   onSave,
+  onNodeClick,
   player,
   onExport,
   onImport,
@@ -240,6 +242,7 @@ export function ProfileEditor({
                 <Table.Th>{profile?.isGto ? 'Value %' : 'Freq %'}</Table.Th>
                 <Table.Th>Weak %</Table.Th>
                 <Table.Th></Table.Th>
+                {onNodeClick && <Table.Th></Table.Th>}
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
@@ -309,6 +312,19 @@ export function ProfileEditor({
                         </Button>
                       )}
                     </Table.Td>
+                    {onNodeClick && (
+                      <Table.Td>
+                        <ActionIcon
+                          variant="subtle"
+                          size="xs"
+                          color="gray"
+                          title="Jump to node"
+                          onClick={() => { onNodeClick(node.id); onClose(); }}
+                        >
+                          <IconEye size={14} />
+                        </ActionIcon>
+                      </Table.Td>
+                    )}
                   </Table.Tr>
                 );
               })}

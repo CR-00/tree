@@ -871,6 +871,7 @@ export default function Home() {
           initialPotSize={selectedSpot.potSize ?? 6.5}
           hideRootFromLine={hideRootFromLine}
           onSave={handleSaveProfile}
+          onNodeClick={handleLeakClick}
           player={editorPlayer}
           onExport={editingProfile ? () => handleExportProfile(editingProfile) : undefined}
           onImport={() => handleImportProfile(editorPlayer)}
