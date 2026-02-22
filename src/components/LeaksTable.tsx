@@ -733,7 +733,7 @@ export function LeaksTable({ tree, initialPotSize, initialOopCombos, initialIpCo
               <Table.Td>{Math.round(exploit.frequency * 100)}%</Table.Td>
               <Table.Td>{Math.round(exploit.gtoFrequency * 100)}%</Table.Td>
               <Table.Td className={`exploit-type-${exploit.type}`}>
-                {exploit.type === 'missed-exploit' ? '+' : '+'}{Math.round(exploit.diff * 100)}%
+                +{Math.round(exploit.diff * 100)}%
               </Table.Td>
               <Table.Td>{Math.round(exploit.relDiff * 100)}%</Table.Td>
             </Table.Tr>
