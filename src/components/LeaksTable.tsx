@@ -673,7 +673,7 @@ export function LeaksTable({ tree, initialPotSize, initialOopCombos, initialIpCo
       {visible && !isFullscreen && <div className="leaks-resize-handle" onPointerDown={handleResizeStart} />}
       <div className="leaks-table-header-bar">
         <Group gap="sm" align="center">
-          <ActionIcon variant="subtle" onClick={onToggleVisible} title={visible ? 'Hide panel' : 'Show panel'}>
+          <ActionIcon variant="subtle" onClick={onToggleVisible} title={visible ? 'Hide panel' : 'Show panel'} disabled={isFullscreen}>
             {visible ? <IconChevronDown size={18} /> : <IconChevronUp size={18} />}
           </ActionIcon>
           <Text fw={600} size="sm">
