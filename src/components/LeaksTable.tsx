@@ -567,7 +567,7 @@ export function LeaksTable({ tree, initialPotSize, initialOopCombos, initialIpCo
       e.combos.toFixed(1),
       Math.round(e.frequency * 100).toString(),
       Math.round(e.gtoFrequency * 100).toString(),
-      `${e.type === 'missed-exploit' ? '+' : '+'}${Math.round(e.diff * 100)}%`,
+      `+${Math.round(e.diff * 100)}%`,
       Math.round(e.relDiff * 100).toString(),
     ]);
     const tsv = [headers, ...rows].map(r => r.join('\t')).join('\n');
