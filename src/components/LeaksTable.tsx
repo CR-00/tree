@@ -418,6 +418,83 @@ function findExploits(
   return exploits;
 }
 
+type ActionPattern = 'stab' | 'donk' | 'probe';
+
+function buildNodeAndParentMaps(
+  node: TreeNode,
+  parent: TreeNode | null,
+  nodeMap: Map<string, TreeNode>,
+  parentMap: Map<string, TreeNode | null>,
+): void {
+  nodeMap.set(node.id, node);
+  parentMap.set(node.id, parent);
+  for (const child of node.children) {
+    buildNodeAndParentMaps(child, node, nodeMap, parentMap);
+  }
+}
+
+// Walk up the ancestor chain to find who made the last bet/raise.
+function getLastAggressor(
+  startId: string,
+  nodeMap: Map<string, TreeNode>,
+  parentMap: Map<string, TreeNode | null>,
+): 'OOP' | 'IP' | null {
+  let id: string | undefined = startId;
+  while (id) {
+    const node = nodeMap.get(id);
+    if (!node) break;
+    if (node.action === 'bet' || node.action === 'raise') return node.player;
+    id = parentMap.get(id)?.id;
+  }
+  return null;
+}
+
+// Returns the action pattern of the bet/raise associated with this node.
+// For bet/raise nodes, checks the node itself. For fold/call nodes, checks
+// the parent bet/raise that prompted the response.
+function getActionPattern(
+  nodeId: string,
+  nodeMap: Map<string, TreeNode>,
+  parentMap: Map<string, TreeNode | null>,
+): ActionPattern | null {
+  const node = nodeMap.get(nodeId);
+  if (!node) return null;
+
+  let betNode: TreeNode | null = null;
+  let betParent: TreeNode | null = null;
+
+  if (node.action === 'bet' || node.action === 'raise') {
+    betNode = node;
+    betParent = parentMap.get(node.id) ?? null;
+  } else if (node.action === 'fold' || node.action === 'call') {
+    const parent = parentMap.get(node.id) ?? null;
+    if (parent && (parent.action === 'bet' || parent.action === 'raise')) {
+      betNode = parent;
+      betParent = parentMap.get(parent.id) ?? null;
+    }
+  }
+
+  if (!betNode || !betParent) return null;
+
+  // Stab: IP bets when OOP checks to them AND IP was not the last aggressor
+  // (i.e. aggression is changing hands to IP, not a c-bet)
+  if (betNode.player === 'IP' && betParent.action === 'check' && betParent.player === 'OOP') {
+    const lastAggressor = getLastAggressor(betParent.id, nodeMap, parentMap);
+    if (lastAggressor !== 'IP') return 'stab';
+    return null; // IP was already the aggressor → c-bet, not a stab
+  }
+  // Probe: OOP bets after IP checks back
+  if (betNode.player === 'OOP' && betParent.action === 'check' && betParent.player === 'IP') {
+    return 'probe';
+  }
+  // Donk: player bets/raises after calling opponent's bet/raise
+  if (betParent.action === 'call' && betParent.player === betNode.player) {
+    return 'donk';
+  }
+
+  return null;
+}
+
 const DEFAULT_HEIGHT = 280;
 const MIN_HEIGHT = 100;
 const MAX_HEIGHT = 600;
@@ -429,6 +506,7 @@ export function LeaksTable({ tree, initialPotSize, initialOopCombos, initialIpCo
   const [typeFilter, setTypeFilter] = useState<string | null>(null);
   const [exploitTypeFilter, setExploitTypeFilter] = useState<string | null>(null);
   const [streetFilter, setStreetFilter] = useState<string | null>(null);
+  const [patternFilter, setPatternFilter] = useState<string | null>(null);
   const [panelHeight, setPanelHeight] = useState(DEFAULT_HEIGHT);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -503,10 +581,18 @@ export function LeaksTable({ tree, initialPotSize, initialOopCombos, initialIpCo
 
   const allExploits = useMemo(() => findExploits(tree, initialPotSize, initialOopCombos, initialIpCombos, [], [], 1, initialPotSize, 0, initialOopCombos, initialIpCombos, true, hideRootFromLine), [tree, initialPotSize, initialOopCombos, initialIpCombos, hideRootFromLine]);
 
+  const { nodeMap, parentMap } = useMemo(() => {
+    const nodeMap = new Map<string, TreeNode>();
+    const parentMap = new Map<string, TreeNode | null>();
+    buildNodeAndParentMaps(tree, null, nodeMap, parentMap);
+    return { nodeMap, parentMap };
+  }, [tree]);
+
   const filterAndSortLeaks = (leaks: Leak[]) => {
     let filtered = leaks;
     if (typeFilter) filtered = filtered.filter(l => l.type === typeFilter);
     if (streetFilter) filtered = filtered.filter(l => l.street === streetFilter);
+    if (patternFilter) filtered = filtered.filter(l => getActionPattern(l.nodeId, nodeMap, parentMap) === patternFilter);
     return filtered.sort((a, b) => {
       let comparison = 0;
       switch (sortField) {
@@ -526,6 +612,7 @@ export function LeaksTable({ tree, initialPotSize, initialOopCombos, initialIpCo
     let filtered = exploits;
     if (exploitTypeFilter) filtered = filtered.filter(e => e.type === exploitTypeFilter);
     if (streetFilter) filtered = filtered.filter(e => e.street === streetFilter);
+    if (patternFilter) filtered = filtered.filter(e => getActionPattern(e.nodeId, nodeMap, parentMap) === patternFilter);
     return filtered.sort((a, b) => {
       let comparison = 0;
       switch (sortField) {
@@ -714,6 +801,19 @@ export function LeaksTable({ tree, initialPotSize, initialOopCombos, initialIpCo
                 w={130}
               />
             )}
+            <Select
+              size="xs"
+              placeholder="All patterns"
+              clearable
+              value={patternFilter}
+              onChange={setPatternFilter}
+              data={[
+                { value: 'stab', label: 'Stab' },
+                { value: 'donk', label: 'Donk' },
+                { value: 'probe', label: 'Probe' },
+              ]}
+              w={120}
+            />
             <Select
               size="xs"
               placeholder="All streets"
