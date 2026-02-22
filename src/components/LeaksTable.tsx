@@ -21,6 +21,21 @@ interface Leak {
   floatEV?: number;
 }
 
+interface Exploit {
+  nodeId: string;
+  path: string;
+  player: 'OOP' | 'IP';
+  type: 'missed-exploit-call' | 'missed-exploit-bet' | 'exploiting-call' | 'exploiting-bet';
+  frequency: number;
+  gtoFrequency: number;
+  diff: number;
+  reach: number;
+  street: Street;
+  potSize: number;
+  combos: number;
+  relDiff: number;
+}
+
 interface LeaksTableProps {
   tree: TreeNode;
   initialPotSize: number;
@@ -94,26 +109,21 @@ function findLeaks(
 ): Leak[] {
   const leaks: Leak[] = [];
 
-  // Reach: how often we arrive at this decision point (excludes this node's own frequency)
   const reach = parentReach;
   const childReach = parentReach * node.frequency;
 
-  // Calculate combos
   const oopCombos = node.player === 'OOP' ? parentOopCombos * node.frequency : parentOopCombos;
   const ipCombos = node.player === 'IP' ? parentIpCombos * node.frequency : parentIpCombos;
   const actingCombos = node.player === 'OOP' ? oopCombos : ipCombos;
 
-  // Calculate pot after this action
   const { newPot, newFacingBet } = calculatePot(node.action, pot, facingBet, node.sizing);
 
-  // Build sizing-aware label (matches TreeView notation)
   const nodeLabel = actionLabels[node.action];
   const hasSizing = (node.action === 'bet' || node.action === 'raise') && node.sizing !== undefined;
   const nodeDisplayLabel = hasSizing
     ? node.action === 'raise' ? `${nodeLabel}${node.sizing}X` : `${nodeLabel}${node.sizing}`
     : nodeLabel;
 
-  // Update the appropriate player's path
   const includeInPath = !(isRoot && hideRootFromLine);
   const newOopPath = node.player === 'OOP' && includeInPath
     ? addToPath(oopPath, node.street, nodeDisplayLabel)
@@ -158,7 +168,7 @@ function findLeaks(
     }
   }
 
-  // Check for overbluffs/underbluffs (B/R nodes with weak% vs gtoWeak%)
+  // Check for overbluffs/underbluffs
   if ((node.action === 'bet' || node.action === 'raise') &&
       node.weakPercent !== undefined &&
       node.gtoWeakPercent !== undefined &&
@@ -181,8 +191,7 @@ function findLeaks(
     });
   }
 
-  // Check for float opportunities at call nodes.
-  // The leak belongs to the *opponent* (who check-folds too much), not the caller.
+  // Check for float opportunities at call nodes (leak belongs to the opponent who check-folds too much)
   if (node.action === 'call') {
     const callAmount = facingBet;
     const callPot = newPot;
@@ -228,12 +237,177 @@ function findLeaks(
     }
   }
 
-  // Recurse into children
   for (const child of node.children) {
     leaks.push(...findLeaks(child, initialPotSize, initialOopCombos, initialIpCombos, newOopPath, newIpPath, childReach, newPot, newFacingBet, oopCombos, ipCombos, false, hideRootFromLine));
   }
 
   return leaks;
+}
+
+function findExploits(
+  node: TreeNode,
+  initialPotSize: number,
+  initialOopCombos: number,
+  initialIpCombos: number,
+  oopPath: PathSegment[] = [],
+  ipPath: PathSegment[] = [],
+  parentReach: number = 1,
+  pot: number = initialPotSize,
+  facingBet: number = 0,
+  parentOopCombos: number = initialOopCombos,
+  parentIpCombos: number = initialIpCombos,
+  isRoot = true,
+  hideRootFromLine = false,
+  opponentOverbluffs: { OOP: boolean; IP: boolean } = { OOP: false, IP: false }
+): Exploit[] {
+  const exploits: Exploit[] = [];
+
+  const reach = parentReach;
+  const childReach = parentReach * node.frequency;
+
+  const oopCombos = node.player === 'OOP' ? parentOopCombos * node.frequency : parentOopCombos;
+  const ipCombos = node.player === 'IP' ? parentIpCombos * node.frequency : parentIpCombos;
+  const actingCombos = node.player === 'OOP' ? oopCombos : ipCombos;
+
+  const { newPot, newFacingBet } = calculatePot(node.action, pot, facingBet, node.sizing);
+
+  const nodeLabel = actionLabels[node.action];
+  const hasSizing = (node.action === 'bet' || node.action === 'raise') && node.sizing !== undefined;
+  const nodeDisplayLabel = hasSizing
+    ? node.action === 'raise' ? `${nodeLabel}${node.sizing}X` : `${nodeLabel}${node.sizing}`
+    : nodeLabel;
+
+  const includeInPath = !(isRoot && hideRootFromLine);
+  const newOopPath = node.player === 'OOP' && includeInPath
+    ? addToPath(oopPath, node.street, nodeDisplayLabel)
+    : oopPath;
+  const newIpPath = node.player === 'IP' && includeInPath
+    ? addToPath(ipPath, node.street, nodeDisplayLabel)
+    : ipPath;
+  const playerPath = node.player === 'OOP' ? newOopPath : newIpPath;
+
+  const isOverbluff = (node.action === 'bet' || node.action === 'raise') &&
+    node.weakPercent !== undefined &&
+    node.gtoWeakPercent !== undefined &&
+    node.weakPercent > node.gtoWeakPercent;
+
+  const newOverbluffs = {
+    ...opponentOverbluffs,
+    [node.player]: opponentOverbluffs[node.player as 'OOP' | 'IP'] || isOverbluff,
+  };
+
+  const opponent = node.player === 'OOP' ? 'IP' : 'OOP';
+  const opponentHasOverbluffed = opponentOverbluffs[opponent];
+
+  // Missed exploit (call): overfolding when opponent overbluffs — should be calling more
+  if (node.action === 'fold' && node.frequency > node.gtoFrequency && opponentHasOverbluffed) {
+    exploits.push({
+      nodeId: node.id,
+      path: formatPath(playerPath),
+      player: node.player,
+      type: 'missed-exploit-call',
+      frequency: node.frequency,
+      gtoFrequency: node.gtoFrequency,
+      diff: node.frequency - node.gtoFrequency,
+      reach,
+      street: node.street,
+      potSize: newPot,
+      combos: actingCombos,
+      relDiff: node.gtoFrequency > 0 ? (node.frequency - node.gtoFrequency) / node.gtoFrequency : 0,
+    });
+  }
+
+  // Missed exploit (bet): betting less than GTO when opponent overfoldsm — should be betting more
+  if ((node.action === 'bet' || node.action === 'raise') && node.frequency < node.gtoFrequency) {
+    const opponentOverfolds = node.children.some(child =>
+      child.action === 'fold' && child.player !== node.player && child.frequency > child.gtoFrequency
+    );
+    if (opponentOverfolds) {
+      exploits.push({
+        nodeId: node.id,
+        path: formatPath(playerPath),
+        player: node.player,
+        type: 'missed-exploit-bet',
+        frequency: node.frequency,
+        gtoFrequency: node.gtoFrequency,
+        diff: node.gtoFrequency - node.frequency,
+        reach,
+        street: node.street,
+        potSize: newPot,
+        combos: actingCombos,
+        relDiff: node.gtoFrequency > 0 ? (node.gtoFrequency - node.frequency) / node.gtoFrequency : 0,
+      });
+    }
+  }
+
+  // Exploiting call: underfold (calling more) when opponent overbluffs
+  if (node.action === 'fold' && node.frequency < node.gtoFrequency && opponentHasOverbluffed) {
+    exploits.push({
+      nodeId: node.id,
+      path: formatPath(playerPath),
+      player: node.player,
+      type: 'exploiting-call',
+      frequency: node.frequency,
+      gtoFrequency: node.gtoFrequency,
+      diff: node.gtoFrequency - node.frequency,
+      reach,
+      street: node.street,
+      potSize: newPot,
+      combos: actingCombos,
+      relDiff: node.gtoFrequency > 0 ? (node.gtoFrequency - node.frequency) / node.gtoFrequency : 0,
+    });
+  }
+
+  // Exploiting call: overcalling when opponent overbluffs
+  if (node.action === 'call' && node.frequency > node.gtoFrequency && opponentHasOverbluffed) {
+    exploits.push({
+      nodeId: node.id,
+      path: formatPath(playerPath),
+      player: node.player,
+      type: 'exploiting-call',
+      frequency: node.frequency,
+      gtoFrequency: node.gtoFrequency,
+      diff: node.frequency - node.gtoFrequency,
+      reach,
+      street: node.street,
+      potSize: newPot,
+      combos: actingCombos,
+      relDiff: node.gtoFrequency > 0 ? (node.frequency - node.gtoFrequency) / node.gtoFrequency : 0,
+    });
+  }
+
+  // Exploiting bet: betting more than GTO into opponent's overfold
+  if ((node.action === 'bet' || node.action === 'raise') && node.frequency > node.gtoFrequency) {
+    const opponentOverfolds = node.children.some(child =>
+      child.action === 'fold' && child.player !== node.player && child.frequency > child.gtoFrequency
+    );
+    if (opponentOverfolds) {
+      exploits.push({
+        nodeId: node.id,
+        path: formatPath(playerPath),
+        player: node.player,
+        type: 'exploiting-bet',
+        frequency: node.frequency,
+        gtoFrequency: node.gtoFrequency,
+        diff: node.frequency - node.gtoFrequency,
+        reach,
+        street: node.street,
+        potSize: newPot,
+        combos: actingCombos,
+        relDiff: node.gtoFrequency > 0 ? (node.frequency - node.gtoFrequency) / node.gtoFrequency : 0,
+      });
+    }
+  }
+
+  for (const child of node.children) {
+    exploits.push(...findExploits(
+      child, initialPotSize, initialOopCombos, initialIpCombos,
+      newOopPath, newIpPath, childReach, newPot, newFacingBet,
+      oopCombos, ipCombos, false, hideRootFromLine, newOverbluffs
+    ));
+  }
+
+  return exploits;
 }
 
 const DEFAULT_HEIGHT = 280;
@@ -245,11 +419,14 @@ export function LeaksTable({ tree, initialPotSize, initialOopCombos, initialIpCo
   const [sortField, setSortField] = useState<SortField>('relDiff');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [typeFilter, setTypeFilter] = useState<string | null>(null);
+  const [exploitTypeFilter, setExploitTypeFilter] = useState<string | null>(null);
   const [streetFilter, setStreetFilter] = useState<string | null>(null);
   const [panelHeight, setPanelHeight] = useState(DEFAULT_HEIGHT);
   const [copied, setCopied] = useState(false);
   const dragStartY = useRef<number>(0);
   const dragStartHeight = useRef<number>(DEFAULT_HEIGHT);
+
+  const isExploitTab = activeTab === 'oop-exploits' || activeTab === 'ip-exploits';
 
   const handleResizeStart = useCallback((e: React.PointerEvent) => {
     e.preventDefault();
@@ -292,45 +469,64 @@ export function LeaksTable({ tree, initialPotSize, initialOopCombos, initialIpCo
     });
   }, []);
 
+  const handleCopyExploits = useCallback((exploits: Exploit[]) => {
+    const headers = ['Type', 'Street', 'Line', 'Pot (BB)', 'Reach %', 'Combos', 'Actual %', 'GTO %', 'Diff %', 'Rel. Diff %'];
+    const rows = exploits.map(e => [
+      e.type === 'missed-exploit-call' ? 'Missed (Call)' : e.type === 'missed-exploit-bet' ? 'Missed (Bet)' : e.type === 'exploiting-call' ? 'Exploit (Call)' : 'Exploit (Bet)',
+      streetLabels[e.street],
+      e.path,
+      e.potSize.toFixed(1),
+      (e.reach * 100).toFixed(1),
+      e.combos.toFixed(1),
+      Math.round(e.frequency * 100).toString(),
+      Math.round(e.gtoFrequency * 100).toString(),
+      `${e.type === 'missed-exploit' ? '+' : '+'}${Math.round(e.diff * 100)}%`,
+      Math.round(e.relDiff * 100).toString(),
+    ]);
+    const tsv = [headers, ...rows].map(r => r.join('\t')).join('\n');
+    navigator.clipboard.writeText(tsv).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, []);
+
   const allLeaks = useMemo(() => findLeaks(tree, initialPotSize, initialOopCombos, initialIpCombos, [], [], 1, initialPotSize, 0, initialOopCombos, initialIpCombos, true, hideRootFromLine), [tree, initialPotSize, initialOopCombos, initialIpCombos, hideRootFromLine]);
 
-  // Filter and sort leaks
+  const allExploits = useMemo(() => findExploits(tree, initialPotSize, initialOopCombos, initialIpCombos, [], [], 1, initialPotSize, 0, initialOopCombos, initialIpCombos, true, hideRootFromLine), [tree, initialPotSize, initialOopCombos, initialIpCombos, hideRootFromLine]);
+
   const filterAndSortLeaks = (leaks: Leak[]) => {
     let filtered = leaks;
-
-    if (typeFilter) {
-      filtered = filtered.filter(l => l.type === typeFilter);
-    }
-
-    if (streetFilter) {
-      filtered = filtered.filter(l => l.street === streetFilter);
-    }
-
+    if (typeFilter) filtered = filtered.filter(l => l.type === typeFilter);
+    if (streetFilter) filtered = filtered.filter(l => l.street === streetFilter);
     return filtered.sort((a, b) => {
       let comparison = 0;
       switch (sortField) {
-        case 'type':
-          comparison = a.type.localeCompare(b.type);
-          break;
-        case 'street':
-          const streetOrder = { flop: 0, turn: 1, river: 2 };
-          comparison = streetOrder[a.street] - streetOrder[b.street];
-          break;
-        case 'potSize':
-          comparison = a.potSize - b.potSize;
-          break;
-        case 'reach':
-          comparison = a.reach - b.reach;
-          break;
-        case 'diff':
-          comparison = a.diff - b.diff;
-          break;
-        case 'combos':
-          comparison = a.combos - b.combos;
-          break;
-        case 'relDiff':
-          comparison = a.relDiff - b.relDiff;
-          break;
+        case 'type': comparison = a.type.localeCompare(b.type); break;
+        case 'street': { const o = { flop: 0, turn: 1, river: 2 }; comparison = o[a.street] - o[b.street]; break; }
+        case 'potSize': comparison = a.potSize - b.potSize; break;
+        case 'reach': comparison = a.reach - b.reach; break;
+        case 'diff': comparison = a.diff - b.diff; break;
+        case 'combos': comparison = a.combos - b.combos; break;
+        case 'relDiff': comparison = a.relDiff - b.relDiff; break;
+      }
+      return sortDirection === 'desc' ? -comparison : comparison;
+    });
+  };
+
+  const filterAndSortExploits = (exploits: Exploit[]) => {
+    let filtered = exploits;
+    if (exploitTypeFilter) filtered = filtered.filter(e => e.type === exploitTypeFilter);
+    if (streetFilter) filtered = filtered.filter(e => e.street === streetFilter);
+    return filtered.sort((a, b) => {
+      let comparison = 0;
+      switch (sortField) {
+        case 'type': comparison = a.type.localeCompare(b.type); break;
+        case 'street': { const o = { flop: 0, turn: 1, river: 2 }; comparison = o[a.street] - o[b.street]; break; }
+        case 'potSize': comparison = a.potSize - b.potSize; break;
+        case 'reach': comparison = a.reach - b.reach; break;
+        case 'diff': comparison = a.diff - b.diff; break;
+        case 'combos': comparison = a.combos - b.combos; break;
+        case 'relDiff': comparison = a.relDiff - b.relDiff; break;
       }
       return sortDirection === 'desc' ? -comparison : comparison;
     });
@@ -338,6 +534,8 @@ export function LeaksTable({ tree, initialPotSize, initialOopCombos, initialIpCo
 
   const oopLeaks = filterAndSortLeaks(allLeaks.filter(l => l.player === 'OOP'));
   const ipLeaks = filterAndSortLeaks(allLeaks.filter(l => l.player === 'IP'));
+  const oopExploits = filterAndSortExploits(allExploits.filter(e => e.player === 'OOP'));
+  const ipExploits = filterAndSortExploits(allExploits.filter(e => e.player === 'IP'));
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -349,10 +547,7 @@ export function LeaksTable({ tree, initialPotSize, initialOopCombos, initialIpCo
   };
 
   const SortableHeader = ({ field, children }: { field: SortField; children: React.ReactNode }) => (
-    <Table.Th
-      onClick={() => handleSort(field)}
-      style={{ cursor: 'pointer', userSelect: 'none' }}
-    >
+    <Table.Th onClick={() => handleSort(field)} style={{ cursor: 'pointer', userSelect: 'none' }}>
       <Group gap={4} wrap="nowrap">
         {children}
         {sortField === field ? (
@@ -364,11 +559,12 @@ export function LeaksTable({ tree, initialPotSize, initialOopCombos, initialIpCo
     </Table.Th>
   );
 
-  const renderTable = (leaks: Leak[]) => {
-    if (leaks.length === 0) {
-      return <div className="leaks-table-empty">No leaks detected</div>;
-    }
+  const renderLeakLine = (path: string) => path.split(' → ').map((part, j, arr) => (
+    <span key={j}>{part}{j < arr.length - 1 && <span className="leak-arrow"> → </span>}</span>
+  ));
 
+  const renderTable = (leaks: Leak[]) => {
+    if (leaks.length === 0) return <div className="leaks-table-empty">No leaks detected</div>;
     return (
       <Table striped highlightOnHover>
         <Table.Thead>
@@ -387,36 +583,19 @@ export function LeaksTable({ tree, initialPotSize, initialOopCombos, initialIpCo
         </Table.Thead>
         <Table.Tbody>
           {leaks.map((leak, i) => (
-            <Table.Tr
-              key={i}
-              onClick={() => onLeakClick?.(leak.nodeId)}
-              style={onLeakClick ? { cursor: 'pointer' } : undefined}
-            >
+            <Table.Tr key={i} onClick={() => onLeakClick?.(leak.nodeId)} style={onLeakClick ? { cursor: 'pointer' } : undefined}>
               <Table.Td className={`leak-type-${leak.type}`}>
                 {leak.type === 'overfold' ? 'Overfold' : leak.type === 'underfold' ? 'Underfold' : leak.type === 'overbluff' ? 'Overbluff' : leak.type === 'underbluff' ? 'Underbluff' : 'Float'}
               </Table.Td>
-              <Table.Td>
-                <span className={`street-pill ${leak.street}`}>
-                  {streetLabels[leak.street]}
-                </span>
-              </Table.Td>
-              <Table.Td className="leak-line">
-                {leak.path.split(' → ').map((part, j, arr) => (
-                  <span key={j}>
-                    {part}
-                    {j < arr.length - 1 && <span className="leak-arrow"> → </span>}
-                  </span>
-                ))}
-              </Table.Td>
+              <Table.Td><span className={`street-pill ${leak.street}`}>{streetLabels[leak.street]}</span></Table.Td>
+              <Table.Td className="leak-line">{renderLeakLine(leak.path)}</Table.Td>
               <Table.Td>{leak.potSize.toFixed(1)} BB</Table.Td>
               <Table.Td>{(leak.reach * 100).toFixed(1)}%</Table.Td>
               <Table.Td>{leak.combos.toFixed(1)}</Table.Td>
               <Table.Td>{leak.type === 'float' ? '—' : `${Math.round(leak.frequency * 100)}%`}</Table.Td>
               <Table.Td>{leak.type === 'float' ? '—' : `${Math.round(leak.gtoFrequency * 100)}%`}</Table.Td>
               <Table.Td className={`leak-type-${leak.type}`}>
-                {leak.type === 'float'
-                  ? `+${leak.floatEV!.toFixed(1)} BB`
-                  : `${leak.type === 'overfold' || leak.type === 'overbluff' ? '+' : '-'}${Math.round(leak.diff * 100)}%`}
+                {leak.type === 'float' ? `+${leak.floatEV!.toFixed(1)} BB` : `${leak.type === 'overfold' || leak.type === 'overbluff' ? '+' : '-'}${Math.round(leak.diff * 100)}%`}
               </Table.Td>
               <Table.Td>{leak.type === 'float' ? '—' : `${Math.round(leak.relDiff * 100)}%`}</Table.Td>
             </Table.Tr>
@@ -426,41 +605,102 @@ export function LeaksTable({ tree, initialPotSize, initialOopCombos, initialIpCo
     );
   };
 
+  const renderExploitTable = (exploits: Exploit[]) => {
+    if (exploits.length === 0) return <div className="leaks-table-empty">No exploits detected</div>;
+    return (
+      <Table striped highlightOnHover>
+        <Table.Thead>
+          <Table.Tr>
+            <SortableHeader field="type">Type</SortableHeader>
+            <SortableHeader field="street">Street</SortableHeader>
+            <Table.Th>Line</Table.Th>
+            <SortableHeader field="potSize">Pot</SortableHeader>
+            <SortableHeader field="reach">Reach</SortableHeader>
+            <SortableHeader field="combos">Combos</SortableHeader>
+            <Table.Th>Actual</Table.Th>
+            <Table.Th>GTO</Table.Th>
+            <SortableHeader field="diff">Diff</SortableHeader>
+            <SortableHeader field="relDiff">Rel. Diff</SortableHeader>
+          </Table.Tr>
+        </Table.Thead>
+        <Table.Tbody>
+          {exploits.map((exploit, i) => (
+            <Table.Tr key={i} onClick={() => onLeakClick?.(exploit.nodeId)} style={onLeakClick ? { cursor: 'pointer' } : undefined}>
+              <Table.Td className={`exploit-type-${exploit.type}`}>
+                {exploit.type === 'missed-exploit-call' ? 'Missed (Call)' : exploit.type === 'missed-exploit-bet' ? 'Missed (Bet)' : exploit.type === 'exploiting-call' ? 'Exploit (Call)' : 'Exploit (Bet)'}
+              </Table.Td>
+              <Table.Td><span className={`street-pill ${exploit.street}`}>{streetLabels[exploit.street]}</span></Table.Td>
+              <Table.Td className="leak-line">{renderLeakLine(exploit.path)}</Table.Td>
+              <Table.Td>{exploit.potSize.toFixed(1)} BB</Table.Td>
+              <Table.Td>{(exploit.reach * 100).toFixed(1)}%</Table.Td>
+              <Table.Td>{exploit.combos.toFixed(1)}</Table.Td>
+              <Table.Td>{Math.round(exploit.frequency * 100)}%</Table.Td>
+              <Table.Td>{Math.round(exploit.gtoFrequency * 100)}%</Table.Td>
+              <Table.Td className={`exploit-type-${exploit.type}`}>
+                {exploit.type === 'missed-exploit' ? '+' : '+'}{Math.round(exploit.diff * 100)}%
+              </Table.Td>
+              <Table.Td>{Math.round(exploit.relDiff * 100)}%</Table.Td>
+            </Table.Tr>
+          ))}
+        </Table.Tbody>
+      </Table>
+    );
+  };
+
   const totalLeaks = allLeaks.length;
+  const totalExploits = allExploits.length;
+
+  const activeCopyData = activeTab === 'ip' ? ipLeaks
+    : activeTab === 'oop-exploits' ? oopExploits
+    : activeTab === 'ip-exploits' ? ipExploits
+    : oopLeaks;
 
   return (
     <div className="leaks-panel" style={visible ? { height: panelHeight } : undefined}>
       {visible && <div className="leaks-resize-handle" onPointerDown={handleResizeStart} />}
       <div className="leaks-table-header-bar">
         <Group gap="sm" align="center">
-          <ActionIcon
-            variant="subtle"
-            onClick={onToggleVisible}
-            title={visible ? 'Hide leaks panel' : 'Show leaks panel'}
-          >
+          <ActionIcon variant="subtle" onClick={onToggleVisible} title={visible ? 'Hide panel' : 'Show panel'}>
             {visible ? <IconChevronDown size={18} /> : <IconChevronUp size={18} />}
           </ActionIcon>
           <Text fw={600} size="sm">
-            Leaks ({totalLeaks})
+            Leaks ({totalLeaks}) · Exploits ({totalExploits})
           </Text>
         </Group>
         {visible && (
           <Group gap="sm">
-            <Select
-              size="xs"
-              placeholder="All types"
-              clearable
-              value={typeFilter}
-              onChange={setTypeFilter}
-              data={[
-                { value: 'overfold', label: 'Overfold' },
-                { value: 'underfold', label: 'Underfold' },
-                { value: 'overbluff', label: 'Overbluff' },
-                { value: 'underbluff', label: 'Underbluff' },
-                { value: 'float', label: 'Float' },
-              ]}
-              w={120}
-            />
+            {!isExploitTab ? (
+              <Select
+                size="xs"
+                placeholder="All types"
+                clearable
+                value={typeFilter}
+                onChange={setTypeFilter}
+                data={[
+                  { value: 'overfold', label: 'Overfold' },
+                  { value: 'underfold', label: 'Underfold' },
+                  { value: 'overbluff', label: 'Overbluff' },
+                  { value: 'underbluff', label: 'Underbluff' },
+                  { value: 'float', label: 'Float' },
+                ]}
+                w={130}
+              />
+            ) : (
+              <Select
+                size="xs"
+                placeholder="All types"
+                clearable
+                value={exploitTypeFilter}
+                onChange={setExploitTypeFilter}
+                data={[
+                  { value: 'missed-exploit-call', label: 'Missed (Call)' },
+                  { value: 'missed-exploit-bet', label: 'Missed (Bet)' },
+                  { value: 'exploiting-call', label: 'Exploit (Call)' },
+                  { value: 'exploiting-bet', label: 'Exploit (Bet)' },
+                ]}
+                w={130}
+              />
+            )}
             <Select
               size="xs"
               placeholder="All streets"
@@ -476,7 +716,7 @@ export function LeaksTable({ tree, initialPotSize, initialOopCombos, initialIpCo
             />
             <ActionIcon
               variant="subtle"
-              onClick={() => handleCopy(activeTab === 'ip' ? ipLeaks : oopLeaks)}
+              onClick={() => isExploitTab ? handleCopyExploits(activeCopyData as Exploit[]) : handleCopy(activeCopyData as Leak[])}
               title="Copy as table (paste into Google Sheets)"
               color={copied ? 'teal' : undefined}
             >
@@ -490,21 +730,16 @@ export function LeaksTable({ tree, initialPotSize, initialOopCombos, initialIpCo
         <Collapse in={visible}>
           <Tabs value={activeTab} onChange={setActiveTab}>
             <Tabs.List>
-              <Tabs.Tab value="oop">
-                OOP Leaks ({oopLeaks.length})
-              </Tabs.Tab>
-              <Tabs.Tab value="ip">
-                IP Leaks ({ipLeaks.length})
-              </Tabs.Tab>
+              <Tabs.Tab value="oop">OOP Leaks ({oopLeaks.length})</Tabs.Tab>
+              <Tabs.Tab value="ip">IP Leaks ({ipLeaks.length})</Tabs.Tab>
+              <Tabs.Tab value="oop-exploits">OOP Exploits ({oopExploits.length})</Tabs.Tab>
+              <Tabs.Tab value="ip-exploits">IP Exploits ({ipExploits.length})</Tabs.Tab>
             </Tabs.List>
 
-            <Tabs.Panel value="oop" pt="sm">
-              {renderTable(oopLeaks)}
-            </Tabs.Panel>
-
-            <Tabs.Panel value="ip" pt="sm">
-              {renderTable(ipLeaks)}
-            </Tabs.Panel>
+            <Tabs.Panel value="oop" pt="sm">{renderTable(oopLeaks)}</Tabs.Panel>
+            <Tabs.Panel value="ip" pt="sm">{renderTable(ipLeaks)}</Tabs.Panel>
+            <Tabs.Panel value="oop-exploits" pt="sm">{renderExploitTable(oopExploits)}</Tabs.Panel>
+            <Tabs.Panel value="ip-exploits" pt="sm">{renderExploitTable(ipExploits)}</Tabs.Panel>
           </Tabs>
         </Collapse>
       </div>

@@ -128,12 +128,6 @@ body {
   margin-bottom: 6px;
 }
 
-.action-label-group {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
 
 .action-label {
   font-size: 18px;
@@ -874,6 +868,22 @@ body {
 
 .leak-type-float {
   color: #fcc419;
+  font-weight: 600;
+}
+
+.exploit-type-missed-exploit-call,
+.exploit-type-missed-exploit-bet {
+  color: #ff6b6b;
+  font-weight: 600;
+}
+
+.exploit-type-exploiting-call {
+  color: #69db7c;
+  font-weight: 600;
+}
+
+.exploit-type-exploiting-bet {
+  color: #69db7c;
   font-weight: 600;
 }
 

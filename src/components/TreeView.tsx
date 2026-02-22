@@ -524,8 +524,20 @@ function layoutTree(root: TreeNodeType, initialPotSize: number, initialOopCombos
 
     // Overfold after opponent overbluff = missed exploit (we should call more)
     const isMissedExploit = isOverfold && opponentHasOverbluffed;
-    // Underfold after opponent overbluff = exploiting (we're calling more correctly)
-    const isExploiting = isUnderfold && opponentHasOverbluffed;
+    // Underfold or overcall after opponent overbluff = exploiting
+    const isExploitingCall = (isUnderfold && opponentHasOverbluffed) ||
+      (node.action === 'call' && node.frequency > node.gtoFrequency && opponentHasOverbluffed);
+
+    // Betting more than GTO into an opponent who folds too much = exploiting their overfold
+    const isExploitingBet = (node.action === 'bet' || node.action === 'raise') &&
+      node.frequency > node.gtoFrequency &&
+      node.children.some(child =>
+        child.action === 'fold' &&
+        child.player !== node.player &&
+        child.frequency > child.gtoFrequency
+      );
+
+    const isExploiting = isExploitingCall || isExploitingBet;
 
     const isFloatOpportunity = floatOpportunities.has(node.id);
     const floatEV = floatOpportunities.get(node.id);
@@ -553,6 +565,7 @@ function layoutTree(root: TreeNodeType, initialPotSize: number, initialOopCombos
         isUnderbluff,
         isMissedExploit,
         isExploiting,
+        isExploitingBet,
         isFloatOpportunity,
         floatEV,
         bluffEV,

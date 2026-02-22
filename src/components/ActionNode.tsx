@@ -20,6 +20,7 @@ interface ActionNodeProps {
     isUnderbluff?: boolean;
     isMissedExploit?: boolean;
     isExploiting?: boolean;
+    isExploitingBet?: boolean;
     isFloatOpportunity?: boolean;
     floatEV?: number;
     bluffEV?: number;
@@ -57,6 +58,7 @@ export function ActionNode({ data }: ActionNodeProps) {
     isUnderbluff,
     isMissedExploit,
     isExploiting,
+    isExploitingBet,
     isFloatOpportunity,
     floatEV,
     bluffEV,
@@ -111,22 +113,20 @@ export function ActionNode({ data }: ActionNodeProps) {
       <Handle type="target" position={Position.Top} className="handle" />
 
       <div className="action-card-header">
-        <div className="action-label-group">
-          <span className="action-label" title={line || displayLabel}>
-            {line || displayLabel}
-          </span>
+        <span className="action-label" title={line || displayLabel}>
+          {line || displayLabel}
+        </span>
+        <div className="header-badges">
           {isMissedExploit && (
             <span className="exploit-badge missed" title="Missed exploit opportunity - opponent is overbluffing but you're folding too much">
               MISS
             </span>
           )}
           {isExploiting && (
-            <span className="exploit-badge good" title="Exploiting opponent - correctly calling more vs their overbluffs">
+            <span className="exploit-badge good" title={isExploitingBet ? 'Exploiting opponent - betting more into their overfold' : 'Exploiting opponent - correctly calling more vs their overbluffs'}>
               EXPLOIT
             </span>
           )}
-        </div>
-        <div className="header-badges">
           <span className={`street-badge ${street.toLowerCase()}`} title={`Street: ${street === 'F' ? 'Flop' : street === 'T' ? 'Turn' : 'River'}`}>
             {street}
           </span>
