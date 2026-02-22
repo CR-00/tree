@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import {
-  Modal,
+  Modal, // used as Modal.Root / Modal.Header etc.
   TextInput,
   Textarea,
   Stack,
@@ -13,7 +13,9 @@ import {
   Table,
   ScrollArea,
   Badge,
+  ActionIcon,
 } from '@mantine/core';
+import { IconMaximize, IconMinimize } from '@tabler/icons-react';
 import { Profile, BaseTreeNode, Player, actionLabels } from '@/types';
 
 interface ProfileEditorProps {
@@ -22,23 +24,86 @@ interface ProfileEditorProps {
   profile: Profile | null;
   gtoProfile: Profile;
   tree: BaseTreeNode;
+  initialPotSize: number;
+  hideRootFromLine?: boolean;
   onSave: (profile: Omit<Profile, 'spotId'>) => void;
   player: Player;
   onExport?: () => void;
   onImport?: () => void;
 }
 
-// Flatten tree to get all nodes for a specific player
-function getPlayerNodes(node: BaseTreeNode, player: Player, path: string[] = []): Array<{ node: BaseTreeNode; path: string[] }> {
-  const results: Array<{ node: BaseTreeNode; path: string[] }> = [];
-  const currentPath = [...path, actionLabels[node.action]];
+type PathSegment = { street: string; actions: string[] };
+
+function addToPath(path: PathSegment[], street: string, action: string): PathSegment[] {
+  if (path.length > 0 && path[path.length - 1].street === street) {
+    const last = path[path.length - 1];
+    return [...path.slice(0, -1), { street, actions: [...last.actions, action] }];
+  }
+  return [...path, { street, actions: [action] }];
+}
+
+function formatPath(path: PathSegment[]): string {
+  return path.map(seg => seg.actions.join('')).join(' → ');
+}
+
+function calcNextPot(action: string, pot: number, facingBet: number, sizing?: number): { pot: number; facingBet: number } {
+  switch (action) {
+    case 'bet': {
+      const betAmount = pot * (sizing || 50) / 100;
+      return { pot: pot + betAmount, facingBet: betAmount };
+    }
+    case 'raise': {
+      const raiseTotal = (sizing || 3) * facingBet;
+      return { pot: pot + raiseTotal, facingBet: raiseTotal - facingBet };
+    }
+    case 'call':
+      return { pot: pot + facingBet, facingBet: 0 };
+    default:
+      return { pot, facingBet: 0 };
+  }
+}
+
+// Flatten tree to get all nodes for a specific player, using street-aware path segments
+function getPlayerNodes(
+  node: BaseTreeNode,
+  player: Player,
+  oopPath: PathSegment[] = [],
+  ipPath: PathSegment[] = [],
+  depth = 0,
+  pot = 0,
+  facingBet = 0,
+  isRoot = true,
+  hideRootFromLine = false,
+): Array<{ node: BaseTreeNode; path: string; depth: number }> {
+  const results: Array<{ node: BaseTreeNode; path: string; depth: number }> = [];
+
+  const nodeLabel = actionLabels[node.action];
+  const hasSizing = (node.action === 'bet' || node.action === 'raise') && node.sizing !== undefined;
+  const callSizing = node.action === 'call' && facingBet > 0 && pot > facingBet
+    ? Math.round(facingBet / (pot - facingBet) * 100)
+    : undefined;
+  const nodeDisplayLabel = hasSizing
+    ? node.action === 'raise' ? `${nodeLabel}${node.sizing}X` : `${nodeLabel}${node.sizing}`
+    : callSizing !== undefined ? `${nodeLabel}${callSizing}`
+    : nodeLabel;
+
+  const includeInPath = !(isRoot && hideRootFromLine);
+  const newOopPath = node.player === 'OOP' && includeInPath
+    ? addToPath(oopPath, node.street, nodeDisplayLabel)
+    : oopPath;
+  const newIpPath = node.player === 'IP' && includeInPath
+    ? addToPath(ipPath, node.street, nodeDisplayLabel)
+    : ipPath;
+
+  const { pot: newPot, facingBet: newFacingBet } = calcNextPot(node.action, pot, facingBet, node.sizing);
 
   if (node.player === player) {
-    results.push({ node, path: currentPath });
+    const playerPath = player === 'OOP' ? newOopPath : newIpPath;
+    results.push({ node, path: formatPath(playerPath), depth });
   }
 
   for (const child of node.children) {
-    results.push(...getPlayerNodes(child, player, currentPath));
+    results.push(...getPlayerNodes(child, player, newOopPath, newIpPath, depth + 1, newPot, newFacingBet, false, hideRootFromLine));
   }
 
   return results;
@@ -50,17 +115,20 @@ export function ProfileEditor({
   profile,
   gtoProfile,
   tree,
+  initialPotSize,
+  hideRootFromLine = false,
   onSave,
   player,
   onExport,
   onImport,
 }: ProfileEditorProps) {
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [nodeData, setNodeData] = useState<Record<string, { frequency: number; weakPercent?: number }>>({});
 
   // Get all nodes for this player, sorted by path length (earliest nodes first)
-  const playerNodes = getPlayerNodes(tree, player).sort((a, b) => a.path.length - b.path.length);
+  const playerNodes = getPlayerNodes(tree, player, [], [], 0, initialPotSize, 0, true, hideRootFromLine).sort((a, b) => a.depth - b.depth);
 
   useEffect(() => {
     if (profile) {
@@ -124,13 +192,20 @@ export function ProfileEditor({
   const hasWeak = (node: BaseTreeNode) => node.action === 'bet' || node.action === 'raise';
 
   return (
-    <Modal
-      opened={opened}
-      onClose={onClose}
-      title={profile ? `Edit Profile: ${profile.name}` : `New ${player} Profile`}
-      size="lg"
-    >
-      <Stack gap="md">
+    <Modal.Root opened={opened} onClose={onClose} size={isFullscreen ? undefined : 'lg'} fullScreen={isFullscreen}>
+      <Modal.Overlay />
+      <Modal.Content>
+        <Modal.Header>
+          <Modal.Title>{profile ? `Edit Profile: ${profile.name}` : `New ${player} Profile`}</Modal.Title>
+          <Group gap={4}>
+            <ActionIcon variant="subtle" size="md" onClick={() => setIsFullscreen(f => !f)} title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}>
+              {isFullscreen ? <IconMinimize size={18} /> : <IconMaximize size={18} />}
+            </ActionIcon>
+            <Modal.CloseButton />
+          </Group>
+        </Modal.Header>
+        <Modal.Body>
+      <Stack gap="md" style={isFullscreen ? { height: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column' } : undefined}>
         <TextInput
           label="Profile Name"
           placeholder="e.g., Fish, Regular, Nit"
@@ -155,13 +230,13 @@ export function ProfileEditor({
             : 'Leave blank to use GTO frequency. Values are percentages (0-100).'}
         </Text>
 
-        <ScrollArea h={300}>
+        <ScrollArea h={isFullscreen ? undefined : 300} style={isFullscreen ? { flex: 1, minHeight: 0 } : undefined}>
           <Table striped highlightOnHover>
             <Table.Thead>
               <Table.Tr>
                 <Table.Th>Line</Table.Th>
                 <Table.Th>Action</Table.Th>
-                <Table.Th>GTO %</Table.Th>
+                {!profile?.isGto && <Table.Th>GTO %</Table.Th>}
                 <Table.Th>{profile?.isGto ? 'Value %' : 'Freq %'}</Table.Th>
                 <Table.Th>Weak %</Table.Th>
                 <Table.Th></Table.Th>
@@ -182,18 +257,18 @@ export function ProfileEditor({
                 return (
                   <Table.Tr key={node.id}>
                     <Table.Td>
-                      <Text size="xs" c="dimmed">{path.join(' → ')}</Text>
+                      <Text size="xs" c="dimmed">{path || 'root'}</Text>
                     </Table.Td>
                     <Table.Td>
                       <Badge size="sm" variant="light">
                         {actionLabels[node.action]}
                       </Badge>
                     </Table.Td>
-                    <Table.Td>
-                      {!profile?.isGto && (
+                    {!profile?.isGto && (
+                      <Table.Td>
                         <Text size="sm">{Math.round(gtoFrequency * 100)}%</Text>
-                      )}
-                    </Table.Td>
+                      </Table.Td>
+                    )}
                     <Table.Td>
                       <NumberInput
                         size="xs"
@@ -264,6 +339,8 @@ export function ProfileEditor({
           </Group>
         </Group>
       </Stack>
-    </Modal>
+        </Modal.Body>
+      </Modal.Content>
+    </Modal.Root>
   );
 }

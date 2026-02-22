@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useRef, useCallback } from 'react';
 import { Table, Tabs, Select, Group, ActionIcon, Text, Collapse } from '@mantine/core';
-import { IconChevronDown, IconChevronUp, IconArrowsSort, IconCopy, IconCheck } from '@tabler/icons-react';
+import { IconChevronDown, IconChevronUp, IconArrowsSort, IconCopy, IconCheck, IconMaximize, IconMinimize } from '@tabler/icons-react';
 import { TreeNode, actionLabels, streetLabels, Street } from '@/types';
 
 interface Leak {
@@ -120,8 +120,12 @@ function findLeaks(
 
   const nodeLabel = actionLabels[node.action];
   const hasSizing = (node.action === 'bet' || node.action === 'raise') && node.sizing !== undefined;
+  const callSizing = node.action === 'call' && facingBet > 0 && pot > facingBet
+    ? Math.round(facingBet / (pot - facingBet) * 100)
+    : undefined;
   const nodeDisplayLabel = hasSizing
     ? node.action === 'raise' ? `${nodeLabel}${node.sizing}X` : `${nodeLabel}${node.sizing}`
+    : callSizing !== undefined ? `${nodeLabel}${callSizing}`
     : nodeLabel;
 
   const includeInPath = !(isRoot && hideRootFromLine);
@@ -273,8 +277,12 @@ function findExploits(
 
   const nodeLabel = actionLabels[node.action];
   const hasSizing = (node.action === 'bet' || node.action === 'raise') && node.sizing !== undefined;
+  const callSizing = node.action === 'call' && facingBet > 0 && pot > facingBet
+    ? Math.round(facingBet / (pot - facingBet) * 100)
+    : undefined;
   const nodeDisplayLabel = hasSizing
     ? node.action === 'raise' ? `${nodeLabel}${node.sizing}X` : `${nodeLabel}${node.sizing}`
+    : callSizing !== undefined ? `${nodeLabel}${callSizing}`
     : nodeLabel;
 
   const includeInPath = !(isRoot && hideRootFromLine);
@@ -422,6 +430,7 @@ export function LeaksTable({ tree, initialPotSize, initialOopCombos, initialIpCo
   const [exploitTypeFilter, setExploitTypeFilter] = useState<string | null>(null);
   const [streetFilter, setStreetFilter] = useState<string | null>(null);
   const [panelHeight, setPanelHeight] = useState(DEFAULT_HEIGHT);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [copied, setCopied] = useState(false);
   const dragStartY = useRef<number>(0);
   const dragStartHeight = useRef<number>(DEFAULT_HEIGHT);
@@ -655,9 +664,13 @@ export function LeaksTable({ tree, initialPotSize, initialOopCombos, initialIpCo
     : activeTab === 'ip-exploits' ? ipExploits
     : oopLeaks;
 
+  const fullscreenStyle: React.CSSProperties = isFullscreen
+    ? { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, height: '100vh', zIndex: 200 }
+    : visible ? { height: panelHeight } : {};
+
   return (
-    <div className="leaks-panel" style={visible ? { height: panelHeight } : undefined}>
-      {visible && <div className="leaks-resize-handle" onPointerDown={handleResizeStart} />}
+    <div className="leaks-panel" style={fullscreenStyle}>
+      {visible && !isFullscreen && <div className="leaks-resize-handle" onPointerDown={handleResizeStart} />}
       <div className="leaks-table-header-bar">
         <Group gap="sm" align="center">
           <ActionIcon variant="subtle" onClick={onToggleVisible} title={visible ? 'Hide panel' : 'Show panel'}>
@@ -721,6 +734,13 @@ export function LeaksTable({ tree, initialPotSize, initialOopCombos, initialIpCo
               color={copied ? 'teal' : undefined}
             >
               {copied ? <IconCheck size={16} /> : <IconCopy size={16} />}
+            </ActionIcon>
+            <ActionIcon
+              variant="subtle"
+              onClick={() => setIsFullscreen(f => !f)}
+              title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+            >
+              {isFullscreen ? <IconMinimize size={16} /> : <IconMaximize size={16} />}
             </ActionIcon>
           </Group>
         )}

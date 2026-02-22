@@ -42,6 +42,9 @@ export async function GET() {
       id: s.id,
       name: s.name,
       description: s.description,
+      potSize: s.potSize,
+      oopCombos: s.oopCombos,
+      ipCombos: s.ipCombos,
       tree: s.tree as unknown as TreeNode,
     }));
 

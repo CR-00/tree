@@ -868,6 +868,8 @@ export default function Home() {
           profile={editingProfile}
           gtoProfile={editorPlayer === 'OOP' ? gtoOOPProfile : gtoIPProfile}
           tree={selectedSpot.tree as BaseTreeNode}
+          initialPotSize={selectedSpot.potSize ?? 6.5}
+          hideRootFromLine={hideRootFromLine}
           onSave={handleSaveProfile}
           player={editorPlayer}
           onExport={editingProfile ? () => handleExportProfile(editingProfile) : undefined}

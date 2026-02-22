@@ -493,8 +493,12 @@ function layoutTree(root: TreeNodeType, initialPotSize: number, initialOopCombos
     // Build the display label for this node (with sizing suffix)
     const nodeLabel = actionLabels[node.action];
     const hasSizing = (node.action === 'bet' || node.action === 'raise') && node.sizing !== undefined;
+    const callSizing = node.action === 'call' && facingBet > 0 && pot > facingBet
+      ? Math.round(facingBet / (pot - facingBet) * 100)
+      : undefined;
     const nodeDisplayLabel = hasSizing
       ? node.action === 'raise' ? `${nodeLabel}${node.sizing}X` : `${nodeLabel}${node.sizing}`
+      : callSizing !== undefined ? `${nodeLabel}${callSizing}`
       : nodeLabel;
 
     // Only append this action to the acting player's path, mirroring LeaksTable logic
